@@ -1,10 +1,13 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
-  TouchableOpacity, Modal, TextInput, SafeAreaView, StatusBar
+  TouchableOpacity, Modal, TextInput, SafeAreaView, StatusBar, Alert
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import { getCurrentUser, logout, updateProfile, UserResponse } from '../../services/auth';
+import AppAlert, { AppAlertVariant } from '../../components/AppAlert';
 
 interface Video {
   id: number;
@@ -80,7 +83,19 @@ function NotificationsModal({ visible, onClose }: { visible: boolean; onClose: (
   );
 }
 
-function ProfileModal({ visible, onClose, onEdit }: { visible: boolean; onClose: () => void; onEdit: () => void }) {
+function ProfileModal({
+  visible,
+  onClose,
+  onEdit,
+  onLogout,
+  user,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  onEdit: () => void;
+  onLogout: () => void;
+  user: UserResponse | null;
+}) {
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <SafeAreaView style={modal.container}>
@@ -92,18 +107,13 @@ function ProfileModal({ visible, onClose, onEdit }: { visible: boolean; onClose:
         </View>
         <View style={modal.content}>
           <View style={modal.profileCenter}>
-            <Image
-              source={{ uri: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200' }}
-              style={modal.avatar}
-              contentFit="cover"
-            />
-            <Text style={modal.profileName}>Observador Padrão</Text>
-            <Text style={modal.profileSince}>Membro desde 2024</Text>
+            <Text style={modal.profileName}>{user?.name ?? 'Usuário'}</Text>
+            <Text style={modal.profileEmail}>{user?.email ?? ''}</Text>
           </View>
           <TouchableOpacity style={modal.profileBtn} onPress={onEdit}>
             <Text style={modal.profileBtnText}>Editar Perfil</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={modal.profileBtnDanger} onPress={onClose}>
+          <TouchableOpacity style={modal.profileBtnDanger} onPress={onLogout}>
             <Text style={modal.profileBtnDangerText}>Sair da Conta</Text>
           </TouchableOpacity>
         </View>
@@ -112,9 +122,69 @@ function ProfileModal({ visible, onClose, onEdit }: { visible: boolean; onClose:
   );
 }
 
-function EditProfileModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
-  const [name, setName] = useState('Observador Padrão');
-  const [bio, setBio] = useState('');
+function EditProfileModal({
+  visible,
+  onClose,
+  user,
+  onSaved,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  user: UserResponse | null;
+  onSaved: (updated: UserResponse) => void;
+}) {
+  const [name, setName] = useState(user?.name ?? '');
+  const [email, setEmail] = useState(user?.email ?? '');
+  const [saving, setSaving] = useState(false);
+  const [alert, setAlert] = useState<{
+    visible: boolean;
+    variant: AppAlertVariant;
+    title: string;
+    message?: string;
+    onCloseAction?: () => void;
+  }>({ visible: false, variant: 'error', title: '' });
+
+  useEffect(() => {
+    if (visible) {
+      setName(user?.name ?? '');
+      setEmail(user?.email ?? '');
+    }
+  }, [visible, user]);
+
+  const showAlert = (
+    variant: AppAlertVariant,
+    title: string,
+    message?: string,
+    onCloseAction?: () => void
+  ) => setAlert({ visible: true, variant, title, message, onCloseAction });
+
+  const closeAlert = () => {
+    const action = alert.onCloseAction;
+    setAlert((prev) => ({ ...prev, visible: false, onCloseAction: undefined }));
+    action?.();
+  };
+
+  const handleSave = async () => {
+    const trimmedName = name.trim();
+    const trimmedEmail = email.trim();
+
+    if (!trimmedName || !trimmedEmail) {
+      showAlert('error', 'Atenção', 'Preencha nome e e-mail.');
+      return;
+    }
+
+    setSaving(true);
+    const result = await updateProfile(trimmedName, trimmedEmail);
+    setSaving(false);
+
+    if (result.success && result.user) {
+      onSaved(result.user);
+      showAlert('success', 'Perfil atualizado', 'Suas informações foram salvas.', onClose);
+    } else {
+      showAlert('error', 'Não foi possível salvar', result.message ?? 'Tente novamente.');
+    }
+  };
+
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <SafeAreaView style={modal.container}>
@@ -125,28 +195,42 @@ function EditProfileModal({ visible, onClose }: { visible: boolean; onClose: () 
           <Text style={modal.title}>Editar Perfil</Text>
         </View>
         <View style={modal.content}>
-          <View style={modal.profileCenter}>
-            <Image
-              source={{ uri: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200' }}
-              style={modal.avatar}
-              contentFit="cover"
-            />
-          </View>
           <Text style={modal.inputLabel}>Nome</Text>
-          <TextInput style={modal.input} value={name} onChangeText={setName} />
-          <Text style={modal.inputLabel}>Bio</Text>
           <TextInput
-            style={[modal.input, { height: 100, textAlignVertical: 'top' }]}
-            value={bio}
-            onChangeText={setBio}
-            multiline
-            placeholder="Conte um pouco sobre você..."
+            style={modal.input}
+            value={name}
+            onChangeText={setName}
+            placeholder="Seu nome"
             placeholderTextColor="rgba(0,0,0,0.4)"
           />
-          <TouchableOpacity style={modal.saveBtn} onPress={onClose}>
-            <Text style={modal.saveBtnText}>Salvar Alterações</Text>
+          <Text style={modal.inputLabel}>E-mail</Text>
+          <TextInput
+            style={modal.input}
+            value={email}
+            onChangeText={setEmail}
+            placeholder="seu@email.com"
+            placeholderTextColor="rgba(0,0,0,0.4)"
+            keyboardType="email-address"
+            autoCapitalize="none"
+          />
+          <TouchableOpacity
+            style={[modal.saveBtn, saving && { opacity: 0.7 }]}
+            onPress={handleSave}
+            disabled={saving}
+          >
+            <Text style={modal.saveBtnText}>
+              {saving ? 'Salvando...' : 'Salvar Alterações'}
+            </Text>
           </TouchableOpacity>
         </View>
+
+        <AppAlert
+          visible={alert.visible}
+          variant={alert.variant}
+          title={alert.title}
+          message={alert.message}
+          onClose={closeAlert}
+        />
       </SafeAreaView>
     </Modal>
   );
@@ -270,12 +354,35 @@ function VideoCard({ video }: { video: Video }) {
 }
 
 export default function HomeScreen() {
+  const router = useRouter();
   const [showNotif, setShowNotif] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
   const [showLive, setShowLive] = useState(false);
   const [videos, setVideos] = useState<Video[]>(INITIAL_VIDEOS);
+  const [user, setUser] = useState<UserResponse | null>(null);
+
+  const loadUser = useCallback(async () => {
+    const current = await getCurrentUser();
+    setUser(current);
+  }, []);
+
+  useEffect(() => {
+    loadUser();
+  }, [loadUser]);
+
+  const openProfile = async () => {
+    await loadUser();
+    setShowProfile(true);
+  };
+
+  const handleLogout = async () => {
+    await logout();
+    setShowProfile(false);
+    setUser(null);
+    router.replace('/login');
+  };
 
   const addVideo = (title: string) => {
     setVideos(prev => [{
@@ -291,10 +398,6 @@ export default function HomeScreen() {
 
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity style={styles.viewBtn}>
-            <Text style={styles.viewBtnText}>View</Text>
-            <Ionicons name="options-outline" size={16} color="#000" />
-          </TouchableOpacity>
           <View style={styles.headerIcons}>
             <TouchableOpacity style={styles.iconBtn} onPress={() => setShowNotif(true)}>
               <Ionicons name="notifications-outline" size={24} color="#000" />
@@ -302,7 +405,7 @@ export default function HomeScreen() {
                 <Text style={styles.notifDotText}>1</Text>
               </View>
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => setShowProfile(true)}>
+            <TouchableOpacity onPress={openProfile}>
               <Ionicons name="person-outline" size={24} color="#000" />
             </TouchableOpacity>
             <TouchableOpacity>
@@ -314,7 +417,7 @@ export default function HomeScreen() {
         {/* Hero */}
         <View style={styles.hero}>
           <Image
-            source={{ uri: 'https://images.unsplash.com/photo-1702287116274-ca44e4fd3632?w=400' }}
+            source={require('../../assets/menuImage.jpg')}
             style={styles.heroImage}
             contentFit="cover"
           />
@@ -324,7 +427,7 @@ export default function HomeScreen() {
           </Text>
 
           {/* Live Button */}
-          <TouchableOpacity style={styles.liveBtn} onPress={() => setShowLive(true)} activeOpacity={0.85}>
+          <TouchableOpacity style={styles.liveBtn} onPress={() => Alert.alert('Indisponível', 'A transmissão em tempo real está indisponível no momento.')} activeOpacity={0.85}>
             <View style={styles.liveBtnIcon}>
               <Ionicons name="videocam" size={26} color="white" />
             </View>
@@ -357,18 +460,20 @@ export default function HomeScreen() {
         </View>
       </ScrollView>
 
-      {/* FAB */}
-      <TouchableOpacity style={styles.fab} onPress={() => setShowUpload(true)}>
-        <Ionicons name="add" size={30} color="white" />
-      </TouchableOpacity>
-
       <NotificationsModal visible={showNotif} onClose={() => setShowNotif(false)} />
       <ProfileModal
         visible={showProfile}
         onClose={() => setShowProfile(false)}
         onEdit={() => { setShowProfile(false); setShowEditProfile(true); }}
+        onLogout={handleLogout}
+        user={user}
       />
-      <EditProfileModal visible={showEditProfile} onClose={() => setShowEditProfile(false)} />
+      <EditProfileModal
+        visible={showEditProfile}
+        onClose={() => setShowEditProfile(false)}
+        user={user}
+        onSaved={(updated) => setUser(updated)}
+      />
       <UploadModal visible={showUpload} onClose={() => setShowUpload(false)} onAdd={addVideo} />
       <LiveModal visible={showLive} onClose={() => setShowLive(false)} />
     </View>
@@ -379,7 +484,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f3f4f6' },
 
   header: {
-    flexDirection: 'row', justifyContent: 'space-between',
+    flexDirection: 'row', justifyContent: 'flex-end',
     alignItems: 'center', paddingTop: 56,
     paddingHorizontal: 20, paddingBottom: 12,
   },
@@ -486,10 +591,9 @@ const modal = StyleSheet.create({
   notifCard: { backgroundColor: '#f3f4f6', borderRadius: 12, padding: 14 },
   notifTitle: { fontWeight: 'bold', fontSize: 13, color: '#000', marginBottom: 4 },
   notifBody: { fontSize: 12, color: 'rgba(0,0,0,0.6)', lineHeight: 18 },
-  profileCenter: { alignItems: 'center', paddingVertical: 16 },
-  avatar: { width: 100, height: 100, borderRadius: 50, marginBottom: 12 },
-  profileName: { fontSize: 22, fontWeight: 'bold', color: '#000' },
-  profileSince: { fontSize: 13, color: 'rgba(0,0,0,0.5)', marginTop: 4 },
+  profileCenter: { alignItems: 'center', paddingVertical: 24 },
+  profileName: { fontSize: 24, fontWeight: 'bold', color: '#000' },
+  profileEmail: { fontSize: 14, color: 'rgba(0,0,0,0.6)', marginTop: 6 },
   profileBtn: { backgroundColor: '#f3f4f6', borderRadius: 12, padding: 16, alignItems: 'center' },
   profileBtnText: { fontSize: 15, fontWeight: 'bold', color: '#000' },
   profileBtnDanger: { backgroundColor: '#fef2f2', borderRadius: 12, padding: 16, alignItems: 'center' },

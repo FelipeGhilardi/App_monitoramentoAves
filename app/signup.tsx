@@ -2,12 +2,13 @@ import { useState } from 'react';
 import {
   View, Text, StyleSheet, TextInput,
   TouchableOpacity, KeyboardAvoidingView,
-  Platform, ScrollView, Alert
+  Platform, ScrollView
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { register } from '../services/auth';
+import AppAlert, { AppAlertVariant } from '../components/AppAlert';
 
 export default function SignupScreen() {
   const router = useRouter();
@@ -18,31 +19,54 @@ export default function SignupScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [alert, setAlert] = useState<{
+    visible: boolean;
+    variant: AppAlertVariant;
+    title: string;
+    message?: string;
+    onCloseAction?: () => void;
+  }>({ visible: false, variant: 'error', title: '' });
+
+  const showAlert = (
+    variant: AppAlertVariant,
+    title: string,
+    message?: string,
+    onCloseAction?: () => void
+  ) => setAlert({ visible: true, variant, title, message, onCloseAction });
+
+  const closeAlert = () => {
+    const action = alert.onCloseAction;
+    setAlert((prev) => ({ ...prev, visible: false, onCloseAction: undefined }));
+    action?.();
+  };
 
   const handleSignup = async () => {
     if (!name || !email || !password || !confirmPassword) {
-      Alert.alert('Atenção', 'Preencha todos os campos.');
+      showAlert('error', 'Atenção', 'Preencha todos os campos.');
       return;
     }
     if (password !== confirmPassword) {
-      Alert.alert('Erro', 'As senhas não coincidem!');
+      showAlert('error', 'Senhas diferentes', 'As senhas não coincidem.');
       return;
     }
     if (password.length < 6) {
-      Alert.alert('Erro', 'A senha deve ter pelo menos 6 caracteres.');
+      showAlert('error', 'Senha muito curta', 'A senha deve ter pelo menos 6 caracteres.');
       return;
     }
 
     setLoading(true);
-    const success = await register(name, email, password);
+    const result = await register(name.trim(), email.trim(), password);
     setLoading(false);
 
-    if (success) {
-      Alert.alert('Conta criada!', 'Seu cadastro foi realizado com sucesso. Faça login para continuar.', [
-        { text: 'OK', onPress: () => router.replace('/login') }
-      ]);
+    if (result.success) {
+      showAlert(
+        'success',
+        'Conta criada!',
+        'Seu cadastro foi realizado com sucesso. Faça login para continuar.',
+        () => router.replace('/login')
+      );
     } else {
-      Alert.alert('Erro', 'Este e-mail já está cadastrado.');
+      showAlert('error', 'Não foi possível cadastrar', result.message ?? 'Tente novamente.');
     }
   };
 
@@ -144,6 +168,14 @@ export default function SignupScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      <AppAlert
+        visible={alert.visible}
+        variant={alert.variant}
+        title={alert.title}
+        message={alert.message}
+        onClose={closeAlert}
+      />
     </KeyboardAvoidingView>
   );
 }

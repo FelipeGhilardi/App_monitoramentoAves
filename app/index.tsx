@@ -1,7 +1,6 @@
 import { useEffect } from 'react';
 import { useRouter } from 'expo-router';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { isLoggedIn } from '../services/auth';
 
 export default function Index() {
@@ -13,8 +12,8 @@ export default function Index() {
 
   const checkAuth = async () => {
     try {
-      await AsyncStorage.clear(); // limpa tudo temporariamente
-      router.replace('/login');
+      const logged = await isLoggedIn();
+      router.replace(logged ? '/(tabs)' : '/login');
     } catch {
       router.replace('/login');
     }

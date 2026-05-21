@@ -2,12 +2,13 @@ import { useState } from 'react';
 import {
   View, Text, StyleSheet, TextInput,
   TouchableOpacity, KeyboardAvoidingView,
-  Platform, ScrollView, Alert
+  Platform, ScrollView
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { login } from '../services/auth';
+import AppAlert, { AppAlertVariant } from '../components/AppAlert';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -15,21 +16,32 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [alert, setAlert] = useState<{
+    visible: boolean;
+    variant: AppAlertVariant;
+    title: string;
+    message?: string;
+  }>({ visible: false, variant: 'error', title: '' });
+
+  const showAlert = (variant: AppAlertVariant, title: string, message?: string) =>
+    setAlert({ visible: true, variant, title, message });
+
+  const closeAlert = () => setAlert((prev) => ({ ...prev, visible: false }));
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
-      Alert.alert('Atenção', 'Preencha e-mail e senha.');
+      showAlert('error', 'Atenção', 'Preencha e-mail e senha.');
       return;
     }
 
     setLoading(true);
-    const success = await login(email.trim(), password);
+    const result = await login(email.trim(), password);
     setLoading(false);
 
-    if (success) {
+    if (result.success) {
       router.replace('/(tabs)');
     } else {
-      Alert.alert('Erro', 'E-mail ou senha incorretos.\nFaça seu cadastro primeiro.');
+      showAlert('error', 'Não foi possível entrar', result.message ?? 'E-mail ou senha incorretos.');
     }
   };
 
@@ -41,7 +53,7 @@ export default function LoginScreen() {
       <ScrollView style={styles.container} bounces={false} showsVerticalScrollIndicator={false}>
         <View style={styles.hero}>
           <Image
-            source={{ uri: 'https://images.unsplash.com/photo-1648227842965-25d3d33372da?w=800' }}
+            source={require('../assets/loginImage.jpg')}
             style={StyleSheet.absoluteFillObject}
             contentFit="cover"
           />
@@ -117,6 +129,14 @@ export default function LoginScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      <AppAlert
+        visible={alert.visible}
+        variant={alert.variant}
+        title={alert.title}
+        message={alert.message}
+        onClose={closeAlert}
+      />
     </KeyboardAvoidingView>
   );
 }

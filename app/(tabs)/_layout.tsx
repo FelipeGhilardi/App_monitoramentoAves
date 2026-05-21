@@ -1,8 +1,16 @@
+import { useEffect } from 'react';
+import { BackHandler } from 'react-native';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../../constants/theme';
 
 export default function TabLayout() {
+  useEffect(() => {
+    const onBackPress = () => true;
+    const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => sub.remove();
+  }, []);
+
   return (
     <Tabs
       screenOptions={{
@@ -41,9 +49,9 @@ export default function TabLayout() {
       <Tabs.Screen
         name="tv"
         options={{
-          title: 'BB TV',
+          title: 'Dashboard',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="tv-outline" size={size} color={color} />
+            <Ionicons name="stats-chart-outline" size={size} color={color} />
           ),
         }}
       />
