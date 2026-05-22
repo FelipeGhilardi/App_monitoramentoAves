@@ -78,7 +78,7 @@ export default function SignupScreen() {
       <ScrollView style={styles.container} bounces={false} showsVerticalScrollIndicator={false}>
         <View style={styles.hero}>
           <Image
-            source={{ uri: 'https://images.unsplash.com/photo-1648227842965-25d3d33372da?w=800' }}
+            source={require('../assets/cadastroImage.jpg')}
             style={StyleSheet.absoluteFillObject}
             contentFit="cover"
           />

@@ -1,62 +1,39 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView,
-  TouchableOpacity, Modal, TextInput, SafeAreaView, StatusBar, Alert
+  View, Text, StyleSheet, ScrollView, FlatList,
+  TouchableOpacity, Modal, TextInput, SafeAreaView, StatusBar, Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { format, parseISO } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import { getCurrentUser, logout, updateProfile, UserResponse } from '../../services/auth';
+import {
+  fetchSightings,
+  getSightingTitle,
+  SightingResponse,
+} from '../../services/sightings';
 import AppAlert, { AppAlertVariant } from '../../components/AppAlert';
 
-interface Video {
-  id: number;
-  title: string;
-  thumbnail: string;
-  duration: string;
-  views: number;
-  date: string;
-  isLive: boolean;
+function getSightingThumbnail(sighting: SightingResponse): string | null {
+  if (sighting.imageUrl) return sighting.imageUrl;
+  const speciesImage = sighting.species.find((s) => s.species?.imageUrl)?.species?.imageUrl;
+  return speciesImage ?? null;
 }
 
-const INITIAL_VIDEOS: Video[] = [
-  {
-    id: 1,
-    title: 'Beija-flor-de-topete se alimentando',
-    thumbnail: 'https://images.unsplash.com/photo-1555203012-f7b9d01f6662?w=400',
-    duration: '12:30',
-    views: 245,
-    date: 'Há 2 horas',
-    isLive: false,
-  },
-  {
-    id: 2,
-    title: 'AO VIVO - Comedouro Principal',
-    thumbnail: 'https://images.unsplash.com/photo-1703142823953-bc43e35742ec?w=400',
-    duration: '',
-    views: 1834,
-    date: 'Ao vivo agora',
-    isLive: true,
-  },
-  {
-    id: 3,
-    title: 'Gralha-azul coletando sementes',
-    thumbnail: 'https://images.unsplash.com/photo-1680484390723-f40bb320c460?w=400',
-    duration: '18:45',
-    views: 512,
-    date: 'Há 5 horas',
-    isLive: false,
-  },
-  {
-    id: 4,
-    title: 'Tucano visitando o comedouro',
-    thumbnail: 'https://images.unsplash.com/photo-1581084353720-d30b23c6b593?w=400',
-    duration: '15:20',
-    views: 1256,
-    date: '2 dias atrás',
-    isLive: false,
-  },
-];
+function formatSightingDate(sighting: SightingResponse): string {
+  try {
+    const safeTime = sighting.time && sighting.time.length >= 5
+      ? (sighting.time.length === 5 ? `${sighting.time}:00` : sighting.time)
+      : '00:00:00';
+    const dt = parseISO(`${sighting.date}T${safeTime}`);
+    return format(dt, "d 'de' MMM, HH:mm", { locale: ptBR });
+  } catch {
+    return sighting.date ?? '';
+  }
+}
 
 function NotificationsModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   return (
@@ -236,41 +213,42 @@ function EditProfileModal({
   );
 }
 
-function UploadModal({ visible, onClose, onAdd }: {
-  visible: boolean; onClose: () => void; onAdd: (title: string) => void;
+function AllSightingsModal({
+  visible,
+  onClose,
+  sightings,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  sightings: SightingResponse[];
 }) {
-  const [title, setTitle] = useState('');
   return (
-    <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
-      <View style={modal.overlay}>
-        <View style={modal.uploadCard}>
-          <View style={modal.uploadHeader}>
-            <Text style={modal.title}>Adicionar Avistamento</Text>
-            <TouchableOpacity onPress={onClose}>
-              <Ionicons name="close" size={24} color="rgba(0,0,0,0.5)" />
-            </TouchableOpacity>
-          </View>
-          <View style={modal.uploadArea}>
-            <Ionicons name="cloud-upload-outline" size={32} color="rgba(0,0,0,0.3)" />
-            <Text style={modal.uploadAreaText}>Selecionar vídeo...</Text>
-          </View>
-          <Text style={modal.inputLabel}>Título do Vídeo</Text>
-          <TextInput
-            style={modal.input}
-            value={title}
-            onChangeText={setTitle}
-            placeholder="Ex: Pica-pau no bebedouro..."
-            placeholderTextColor="rgba(0,0,0,0.4)"
-          />
-          <TouchableOpacity
-            style={[modal.saveBtn, !title.trim() && { opacity: 0.5 }]}
-            onPress={() => { if (title.trim()) { onAdd(title); setTitle(''); onClose(); } }}
-            disabled={!title.trim()}
-          >
-            <Text style={modal.saveBtnText}>Fazer Upload</Text>
+    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
+      <SafeAreaView style={modal.container}>
+        <View style={modal.header}>
+          <TouchableOpacity onPress={onClose} style={modal.backBtn}>
+            <Ionicons name="arrow-back" size={24} color="#000" />
           </TouchableOpacity>
+          <Text style={modal.title}>Todos os avistamentos</Text>
         </View>
-      </View>
+        {sightings.length === 0 ? (
+          <View style={modal.emptyWrap}>
+            <Ionicons name="leaf-outline" size={42} color="rgba(0,0,0,0.3)" />
+            <Text style={modal.emptyTitle}>Nenhum avistamento ainda</Text>
+            <Text style={modal.emptyText}>
+              Quando houver registros, eles aparecerão aqui.
+            </Text>
+          </View>
+        ) : (
+          <FlatList
+            data={sightings}
+            keyExtractor={(item) => String(item.id)}
+            contentContainerStyle={modal.listContent}
+            renderItem={({ item }) => <SightingCard sighting={item} />}
+            showsVerticalScrollIndicator={false}
+          />
+        )}
+      </SafeAreaView>
     </Modal>
   );
 }
@@ -317,36 +295,31 @@ function LiveModal({ visible, onClose }: { visible: boolean; onClose: () => void
   );
 }
 
-function VideoCard({ video }: { video: Video }) {
+function SightingCard({ sighting }: { sighting: SightingResponse }) {
+  const thumbnail = getSightingThumbnail(sighting);
+  const title = getSightingTitle(sighting);
+  const date = formatSightingDate(sighting);
+
   return (
     <View style={styles.videoCard}>
       <View style={styles.videoThumb}>
-        <Image source={{ uri: video.thumbnail }} style={StyleSheet.absoluteFillObject} contentFit="cover" />
-        <View style={styles.playOverlay}>
-          <View style={styles.playBtn}>
-            <Ionicons name="play" size={14} color="#000" />
-          </View>
-        </View>
-        {video.isLive ? (
-          <View style={styles.liveBadge}>
-            <View style={styles.liveDot} />
-            <Text style={styles.liveText}>LIVE</Text>
-          </View>
+        {thumbnail ? (
+          <Image
+            source={{ uri: thumbnail }}
+            style={StyleSheet.absoluteFillObject}
+            contentFit="cover"
+          />
         ) : (
-          <View style={styles.durationBadge}>
-            <Text style={styles.durationText}>{video.duration}</Text>
+          <View style={[StyleSheet.absoluteFillObject, styles.thumbPlaceholder]}>
+            <Ionicons name="image-outline" size={28} color="rgba(0,0,0,0.3)" />
           </View>
         )}
       </View>
       <View style={styles.videoInfo}>
-        <Text style={styles.videoTitle} numberOfLines={2}>{video.title}</Text>
+        <Text style={styles.videoTitle} numberOfLines={2}>{title}</Text>
         <View style={styles.metaRow}>
-          <Ionicons name="eye-outline" size={13} color="rgba(0,0,0,0.5)" />
-          <Text style={styles.metaText}>{video.views} views</Text>
-        </View>
-        <View style={styles.metaRow}>
-          <Ionicons name="time-outline" size={13} color="rgba(0,0,0,0.5)" />
-          <Text style={styles.metaText}>{video.date}</Text>
+          <Ionicons name="calendar-outline" size={13} color="rgba(0,0,0,0.5)" />
+          <Text style={styles.metaText}>{date}</Text>
         </View>
       </View>
     </View>
@@ -358,9 +331,11 @@ export default function HomeScreen() {
   const [showNotif, setShowNotif] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
-  const [showUpload, setShowUpload] = useState(false);
   const [showLive, setShowLive] = useState(false);
-  const [videos, setVideos] = useState<Video[]>(INITIAL_VIDEOS);
+  const [showAllSightings, setShowAllSightings] = useState(false);
+  const [sightings, setSightings] = useState<SightingResponse[]>([]);
+  const [loadingSightings, setLoadingSightings] = useState(true);
+  const [sightingsError, setSightingsError] = useState<string | null>(null);
   const [user, setUser] = useState<UserResponse | null>(null);
 
   const loadUser = useCallback(async () => {
@@ -368,9 +343,23 @@ export default function HomeScreen() {
     setUser(current);
   }, []);
 
+  const loadSightings = useCallback(async () => {
+    setLoadingSightings(true);
+    const result = await fetchSightings();
+    if (result.success && result.data) {
+      setSightings(result.data);
+      setSightingsError(null);
+    } else {
+      setSightings([]);
+      setSightingsError(result.message ?? 'Erro ao carregar avistamentos.');
+    }
+    setLoadingSightings(false);
+  }, []);
+
   useEffect(() => {
     loadUser();
-  }, [loadUser]);
+    loadSightings();
+  }, [loadUser, loadSightings]);
 
   const openProfile = async () => {
     await loadUser();
@@ -384,13 +373,7 @@ export default function HomeScreen() {
     router.replace('/login');
   };
 
-  const addVideo = (title: string) => {
-    setVideos(prev => [{
-      id: Date.now(), title,
-      thumbnail: 'https://images.unsplash.com/photo-1581084353720-d30b23c6b593?w=400',
-      duration: '00:45', views: 0, date: 'Agora mesmo', isLive: false,
-    }, ...prev]);
-  };
+  const latestSightings = sightings.slice(0, 5);
 
   return (
     <View style={styles.container}>
@@ -448,15 +431,40 @@ export default function HomeScreen() {
           <View style={styles.sectionHeader}>
             <View>
               <Text style={styles.sectionTitle}>Últimos avistamentos</Text>
-              <Text style={styles.sectionSub}>Destaques da BB TV</Text>
             </View>
-            <TouchableOpacity>
-              <Text style={styles.seeAll}>Ver tudo</Text>
-            </TouchableOpacity>
+            {sightings.length > 0 && (
+              <TouchableOpacity onPress={() => setShowAllSightings(true)}>
+                <Text style={styles.seeAll}>Ver tudo</Text>
+              </TouchableOpacity>
+            )}
           </View>
-          {videos.slice(0, 4).map(video => (
-            <VideoCard key={video.id} video={video} />
-          ))}
+
+          {loadingSightings ? (
+            <View style={styles.statusBox}>
+              <ActivityIndicator color="#2563eb" />
+              <Text style={styles.statusText}>Carregando avistamentos...</Text>
+            </View>
+          ) : sightingsError ? (
+            <View style={styles.statusBox}>
+              <Ionicons name="cloud-offline-outline" size={28} color="rgba(0,0,0,0.4)" />
+              <Text style={styles.statusText}>{sightingsError}</Text>
+              <TouchableOpacity style={styles.retryBtn} onPress={loadSightings}>
+                <Text style={styles.retryBtnText}>Tentar novamente</Text>
+              </TouchableOpacity>
+            </View>
+          ) : latestSightings.length === 0 ? (
+            <View style={styles.emptyBox}>
+              <Ionicons name="leaf-outline" size={36} color="rgba(0,0,0,0.3)" />
+              <Text style={styles.emptyTitle}>Nenhum avistamento ainda</Text>
+              <Text style={styles.emptyText}>
+                Assim que novos avistamentos forem registrados, eles aparecerão aqui.
+              </Text>
+            </View>
+          ) : (
+            latestSightings.map((sighting) => (
+              <SightingCard key={sighting.id} sighting={sighting} />
+            ))
+          )}
         </View>
       </ScrollView>
 
@@ -474,7 +482,11 @@ export default function HomeScreen() {
         user={user}
         onSaved={(updated) => setUser(updated)}
       />
-      <UploadModal visible={showUpload} onClose={() => setShowUpload(false)} onAdd={addVideo} />
+      <AllSightingsModal
+        visible={showAllSightings}
+        onClose={() => setShowAllSightings(false)}
+        sightings={sightings}
+      />
       <LiveModal visible={showLive} onClose={() => setShowLive(false)} />
     </View>
   );
@@ -541,34 +553,33 @@ const styles = StyleSheet.create({
     shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 2,
   },
   videoThumb: { width: 120, height: 80, borderRadius: 10, overflow: 'hidden', backgroundColor: '#f3f4f6' },
-  playOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.1)',
-    alignItems: 'center', justifyContent: 'center',
+  thumbPlaceholder: {
+    alignItems: 'center', justifyContent: 'center', backgroundColor: '#f3f4f6',
   },
-  playBtn: {
-    width: 30, height: 30, borderRadius: 15,
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  liveBadge: {
-    position: 'absolute', top: 4, left: 4,
-    backgroundColor: '#dc2626', flexDirection: 'row',
-    alignItems: 'center', gap: 3,
-    paddingHorizontal: 5, paddingVertical: 2, borderRadius: 4,
-  },
-  liveDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: 'white' },
-  liveText: { color: 'white', fontSize: 9, fontWeight: 'bold' },
-  durationBadge: {
-    position: 'absolute', bottom: 4, right: 4,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    paddingHorizontal: 5, paddingVertical: 2, borderRadius: 4,
-  },
-  durationText: { color: 'white', fontSize: 9, fontWeight: '600' },
   videoInfo: { flex: 1, justifyContent: 'center', gap: 4 },
   videoTitle: { fontSize: 13, fontWeight: 'bold', color: '#000' },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   metaText: { fontSize: 11, color: 'rgba(0,0,0,0.5)' },
+
+  statusBox: {
+    backgroundColor: 'white', borderRadius: 16, padding: 20,
+    alignItems: 'center', justifyContent: 'center', gap: 10,
+    shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 2,
+  },
+  statusText: { fontSize: 13, color: 'rgba(0,0,0,0.6)', textAlign: 'center' },
+  retryBtn: {
+    backgroundColor: '#2563eb', paddingHorizontal: 16, paddingVertical: 8,
+    borderRadius: 20, marginTop: 4,
+  },
+  retryBtnText: { color: 'white', fontWeight: 'bold', fontSize: 13 },
+
+  emptyBox: {
+    backgroundColor: 'white', borderRadius: 16, padding: 24,
+    alignItems: 'center', justifyContent: 'center', gap: 8,
+    borderWidth: 1, borderColor: '#f3f4f6',
+  },
+  emptyTitle: { fontSize: 15, fontWeight: 'bold', color: '#000', marginTop: 4 },
+  emptyText: { fontSize: 12, color: 'rgba(0,0,0,0.5)', textAlign: 'center', lineHeight: 18 },
 
   fab: {
     position: 'absolute', bottom: 90, right: 20,
@@ -611,6 +622,14 @@ const modal = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center', gap: 8,
   },
   uploadAreaText: { fontSize: 13, color: 'rgba(0,0,0,0.4)' },
+
+  listContent: { padding: 16, gap: 12 },
+  emptyWrap: {
+    flex: 1, alignItems: 'center', justifyContent: 'center',
+    paddingHorizontal: 32, gap: 10,
+  },
+  emptyTitle: { fontSize: 17, fontWeight: 'bold', color: '#000', marginTop: 6 },
+  emptyText: { fontSize: 13, color: 'rgba(0,0,0,0.5)', textAlign: 'center', lineHeight: 19 },
 });
 
 const liveStyle = StyleSheet.create({

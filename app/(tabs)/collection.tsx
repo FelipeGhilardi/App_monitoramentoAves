@@ -1,195 +1,154 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, FlatList,
-  TouchableOpacity, TextInput
+  TouchableOpacity, TextInput, ActivityIndicator,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import { fetchSpecies, SpeciesResponse } from '../../services/species';
 
-interface BirdDetection {
-  id: string;
-  species: string;
-  scientificName: string;
-  timestamp: Date;
-  duration: number;
-  thumbnail: string;
-  confidence: number;
-  description: string;
-}
-
-const MOCK_DETECTIONS: BirdDetection[] = [
-  {
-    id: '1',
-    species: 'Beija-flor-de-topete',
-    scientificName: 'Stephanoxis lalandi',
-    timestamp: new Date('2026-03-21T08:15:00'),
-    duration: 12,
-    thumbnail: 'https://images.unsplash.com/photo-1555203012-f7b9d01f6662?w=800',
-    confidence: 98.5,
-    description: 'Pequeno beija-flor com plumagem verde-brilhante e topete característico. Muito comum em jardins e áreas urbanas.',
-  },
-  {
-    id: '2',
-    species: 'Cardeal',
-    scientificName: 'Paroaria coronata',
-    timestamp: new Date('2026-03-21T07:45:00'),
-    duration: 25,
-    thumbnail: 'https://images.unsplash.com/photo-1694987807364-b5f849310906?w=800',
-    confidence: 95.2,
-    description: 'Ave de porte médio com topete vermelho característico. Conhecida por seu canto melodioso e comportamento territorial.',
-  },
-  {
-    id: '3',
-    species: 'Gralha-azul',
-    scientificName: 'Cyanocorax caeruleus',
-    timestamp: new Date('2026-03-20T16:30:00'),
-    duration: 18,
-    thumbnail: 'https://images.unsplash.com/photo-1680484390723-f40bb320c460?w=800',
-    confidence: 99.1,
-    description: 'Ave símbolo do Paraná, com plumagem azul vibrante e comportamento social. Importante dispersora de sementes de araucária.',
-  },
-  {
-    id: '4',
-    species: 'Pardal',
-    scientificName: 'Passer domesticus',
-    timestamp: new Date('2026-03-20T14:20:00'),
-    duration: 8,
-    thumbnail: 'https://images.unsplash.com/photo-1544378315-47efdfd4064b?w=800',
-    confidence: 92.7,
-    description: 'Ave pequena e comum em áreas urbanas. Espécie introduzida que se adaptou muito bem a ambientes modificados pelo homem.',
-  },
-  {
-    id: '5',
-    species: 'Pica-pau-de-banda-branca',
-    scientificName: 'Dryocopus lineatus',
-    timestamp: new Date('2026-03-19T09:10:00'),
-    duration: 15,
-    thumbnail: 'https://images.unsplash.com/photo-1754262870648-355b3b80dad1?w=800',
-    confidence: 96.8,
-    description: 'Grande pica-pau com plumagem preta e branca. Conhecido pelo som característico ao bicar árvores em busca de insetos.',
-  },
-  {
-    id: '6',
-    species: 'Sabiá-laranjeira',
-    scientificName: 'Turdus rufiventris',
-    timestamp: new Date('2026-03-19T06:00:00'),
-    duration: 22,
-    thumbnail: 'https://images.unsplash.com/photo-1681653105766-3c8750a9d026?w=800',
-    confidence: 97.3,
-    description: 'Ave símbolo do Brasil, famosa por seu canto melodioso. Possui plumagem marrom nas costas e laranja no peito.',
-  },
-];
-
-function BirdCard({ bird }: { bird: BirdDetection }) {
-  const date = format(bird.timestamp, "d 'de' MMM, HH:mm", { locale: ptBR });
-
+function SpeciesCard({ species }: { species: SpeciesResponse }) {
   return (
     <View style={styles.card}>
       <View style={styles.imageContainer}>
-        <Image
-          source={{ uri: bird.thumbnail }}
-          style={styles.image}
-          contentFit="cover"
-        />
-        <View style={styles.confidenceBadge}>
-          <Text style={styles.confidenceText}>{bird.confidence}% precisão</Text>
-        </View>
+        {species.imageUrl ? (
+          <Image
+            source={{ uri: species.imageUrl }}
+            style={styles.image}
+            contentFit="cover"
+          />
+        ) : (
+          <View style={[styles.image, styles.imagePlaceholder]}>
+            <Ionicons name="image-outline" size={40} color="rgba(0,0,0,0.25)" />
+          </View>
+        )}
       </View>
 
       <View style={styles.cardBody}>
-        <Text style={styles.species}>{bird.species}</Text>
-        <Text style={styles.scientificName}>{bird.scientificName}</Text>
+        <Text style={styles.species}>{species.name}</Text>
+        <Text style={styles.scientificName}>{species.scientificName}</Text>
 
-        <View style={styles.descriptionBox}>
-          <Ionicons name="information-circle-outline" size={16} color="#3b82f6" style={{ marginTop: 1 }} />
-          <Text style={styles.descriptionText}>{bird.description}</Text>
-        </View>
+        {species.description ? (
+          <View style={styles.descriptionBox}>
+            <Ionicons
+              name="information-circle-outline"
+              size={16}
+              color="#3b82f6"
+              style={{ marginTop: 1 }}
+            />
+            <Text style={styles.descriptionText}>{species.description}</Text>
+          </View>
+        ) : null}
 
-        <View style={styles.footer}>
-          <View style={styles.footerItem}>
-            <Ionicons name="calendar-outline" size={13} color="rgba(0,0,0,0.5)" />
-            <Text style={styles.footerText}>{date}</Text>
+        {species.tips ? (
+          <View style={styles.tipsBox}>
+            <Ionicons
+              name="bulb-outline"
+              size={16}
+              color="#16a34a"
+              style={{ marginTop: 1 }}
+            />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.tipsLabel}>Dicas</Text>
+              <Text style={styles.tipsText}>{species.tips}</Text>
+            </View>
           </View>
-          <View style={styles.footerItem}>
-            <Ionicons name="time-outline" size={13} color="rgba(0,0,0,0.5)" />
-            <Text style={styles.footerText}>{bird.duration} min</Text>
-          </View>
-        </View>
+        ) : null}
       </View>
     </View>
   );
 }
 
-type FilterType = 'all' | 'favorites' | 'recent';
-
 export default function CollectionScreen() {
   const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState<FilterType>('all');
+  const [species, setSpecies] = useState<SpeciesResponse[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const filtered = MOCK_DETECTIONS.filter(b =>
-    b.species.toLowerCase().includes(search.toLowerCase())
-  );
-
-  const getFiltered = () => {
-    switch (filter) {
-      case 'favorites': return filtered.slice(0, 3);
-      case 'recent': return filtered.slice(0, 4);
-      default: return filtered;
+  const loadSpecies = useCallback(async () => {
+    setLoading(true);
+    const result = await fetchSpecies();
+    if (result.success && result.data) {
+      setSpecies(result.data);
+      setError(null);
+    } else {
+      setSpecies([]);
+      setError(result.message ?? 'Erro ao carregar espécies.');
     }
-  };
+    setLoading(false);
+  }, []);
 
-  const tabs: { key: FilterType; label: string }[] = [
-    { key: 'all', label: `Todas (${MOCK_DETECTIONS.length})` },
-    { key: 'favorites', label: 'Favoritas (3)' },
-    { key: 'recent', label: 'Recentes (4)' },
-  ];
+  useEffect(() => {
+    loadSpecies();
+  }, [loadSpecies]);
+
+  const term = search.trim().toLowerCase();
+  const filtered = term
+    ? species.filter((s) =>
+        [s.name, s.scientificName]
+          .filter(Boolean)
+          .some((value) => value.toLowerCase().includes(term))
+      )
+    : species;
 
   return (
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Minha Coleção</Text>
+        <Text style={styles.headerSubtitle}>
+          {species.length === 0
+            ? 'Nenhuma espécie ainda'
+            : `${species.length} ${species.length === 1 ? 'espécie catalogada' : 'espécies catalogadas'}`}
+        </Text>
         <View style={styles.searchRow}>
           <View style={styles.searchBox}>
             <Ionicons name="search-outline" size={16} color="rgba(255,255,255,0.7)" />
             <TextInput
               style={styles.searchInput}
-              placeholder="Buscar espécie..."
+              placeholder="Buscar por nome ou nome científico..."
               placeholderTextColor="rgba(255,255,255,0.7)"
               value={search}
               onChangeText={setSearch}
             />
           </View>
-          <TouchableOpacity style={styles.filterIconBtn}>
-            <Ionicons name="options-outline" size={20} color="white" />
-          </TouchableOpacity>
         </View>
       </View>
 
-      {/* Filter Tabs */}
-      <View style={styles.tabsRow}>
-        {tabs.map(tab => (
-          <TouchableOpacity
-            key={tab.key}
-            style={[styles.tab, filter === tab.key && styles.tabActive]}
-            onPress={() => setFilter(tab.key)}
-          >
-            <Text style={[styles.tabText, filter === tab.key && styles.tabTextActive]}>
-              {tab.label}
-            </Text>
+      {loading ? (
+        <View style={styles.statusBox}>
+          <ActivityIndicator color="#2563eb" />
+          <Text style={styles.statusText}>Carregando espécies...</Text>
+        </View>
+      ) : error ? (
+        <View style={styles.statusBox}>
+          <Ionicons name="cloud-offline-outline" size={36} color="rgba(0,0,0,0.4)" />
+          <Text style={styles.statusText}>{error}</Text>
+          <TouchableOpacity style={styles.retryBtn} onPress={loadSpecies}>
+            <Text style={styles.retryBtnText}>Tentar novamente</Text>
           </TouchableOpacity>
-        ))}
-      </View>
-
-      <FlatList
-        data={getFiltered()}
-        keyExtractor={item => item.id}
-        renderItem={({ item }) => <BirdCard bird={item} />}
-        contentContainerStyle={styles.list}
-        showsVerticalScrollIndicator={false}
-      />
+        </View>
+      ) : filtered.length === 0 ? (
+        <View style={styles.statusBox}>
+          <Ionicons name="leaf-outline" size={36} color="rgba(0,0,0,0.3)" />
+          <Text style={styles.emptyTitle}>
+            {term ? 'Nenhuma espécie encontrada' : 'Nenhuma espécie cadastrada'}
+          </Text>
+          <Text style={styles.emptyText}>
+            {term
+              ? 'Tente ajustar sua busca.'
+              : 'Assim que houver espécies cadastradas, elas aparecerão aqui.'}
+          </Text>
+        </View>
+      ) : (
+        <FlatList
+          data={filtered}
+          keyExtractor={(item) => String(item.id)}
+          renderItem={({ item }) => <SpeciesCard species={item} />}
+          contentContainerStyle={styles.list}
+          showsVerticalScrollIndicator={false}
+        />
+      )}
     </View>
   );
 }
@@ -202,153 +161,68 @@ const styles = StyleSheet.create({
     paddingTop: 56,
     paddingBottom: 20,
     paddingHorizontal: 16,
-    gap: 14,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: 'white',
-  },
-  searchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
     gap: 10,
   },
+  headerTitle: { fontSize: 24, fontWeight: 'bold', color: 'white' },
+  headerSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.8)' },
+  searchRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4 },
   searchBox: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 8,
+    flex: 1, flexDirection: 'row', alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 12,
+    paddingHorizontal: 12, paddingVertical: 10, gap: 8,
   },
-  searchInput: {
-    flex: 1,
-    fontSize: 14,
-    color: 'white',
-  },
-  filterIconBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  searchInput: { flex: 1, fontSize: 14, color: 'white' },
 
-  tabsRow: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
-  },
-  tab: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-  },
-  tabActive: {
-    backgroundColor: '#2563eb',
-    borderColor: '#2563eb',
-  },
-  tabText: {
-    fontSize: 13,
-    color: 'rgba(0,0,0,0.6)',
-    fontWeight: '500',
-  },
-  tabTextActive: {
-    color: 'white',
-    fontWeight: 'bold',
-  },
-
-  list: {
-    padding: 16,
-    gap: 20,
-    paddingBottom: 40,
-  },
+  list: { padding: 16, gap: 20, paddingBottom: 40 },
 
   card: {
-    backgroundColor: 'white',
-    borderRadius: 16,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
-    borderWidth: 1,
-    borderColor: '#f3f4f6',
+    backgroundColor: 'white', borderRadius: 16, overflow: 'hidden',
+    shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 8, elevation: 3,
+    borderWidth: 1, borderColor: '#f3f4f6',
   },
-  imageContainer: {
-    position: 'relative',
-  },
-  image: {
-    width: '100%',
-    height: 220,
-  },
-  confidenceBadge: {
-    position: 'absolute',
-    top: 12,
-    left: 12,
-    backgroundColor: '#2563eb',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 20,
-  },
-  confidenceText: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: 'bold',
+  imageContainer: { position: 'relative' },
+  image: { width: '100%', height: 220 },
+  imagePlaceholder: {
+    backgroundColor: '#f3f4f6', alignItems: 'center', justifyContent: 'center',
   },
 
-  cardBody: {
-    padding: 16,
-    gap: 6,
-  },
-  species: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#000',
-  },
+  cardBody: { padding: 16, gap: 6 },
+  species: { fontSize: 20, fontWeight: 'bold', color: '#000' },
   scientificName: {
-    fontSize: 13,
-    color: 'rgba(0,0,0,0.5)',
-    fontStyle: 'italic',
-    marginBottom: 4,
+    fontSize: 13, color: 'rgba(0,0,0,0.5)',
+    fontStyle: 'italic', marginBottom: 4,
   },
 
   descriptionBox: {
-    flexDirection: 'row',
-    gap: 8,
-    backgroundColor: '#f0f7ff',
-    borderRadius: 10,
-    padding: 12,
-    marginVertical: 4,
+    flexDirection: 'row', gap: 8,
+    backgroundColor: '#f0f7ff', borderRadius: 10, padding: 12, marginVertical: 4,
   },
   descriptionText: {
-    flex: 1,
-    fontSize: 13,
-    color: 'rgba(0,0,0,0.7)',
-    lineHeight: 19,
+    flex: 1, fontSize: 13, color: 'rgba(0,0,0,0.7)', lineHeight: 19,
   },
 
-  footer: {
-    flexDirection: 'row',
-    gap: 20,
-    marginTop: 4,
+  tipsBox: {
+    flexDirection: 'row', gap: 8,
+    backgroundColor: '#f0fdf4', borderRadius: 10, padding: 12, marginTop: 4,
+    borderLeftWidth: 3, borderLeftColor: '#16a34a',
   },
-  footerItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
+  tipsLabel: {
+    fontSize: 12, fontWeight: 'bold', color: '#16a34a',
+    marginBottom: 2, textTransform: 'uppercase', letterSpacing: 0.4,
   },
-  footerText: {
-    fontSize: 12,
-    color: 'rgba(0,0,0,0.5)',
+  tipsText: { fontSize: 13, color: 'rgba(0,0,0,0.75)', lineHeight: 19 },
+
+  statusBox: {
+    flex: 1, alignItems: 'center', justifyContent: 'center',
+    paddingHorizontal: 32, gap: 10,
   },
+  statusText: { fontSize: 13, color: 'rgba(0,0,0,0.6)', textAlign: 'center' },
+  emptyTitle: { fontSize: 17, fontWeight: 'bold', color: '#000', marginTop: 6 },
+  emptyText: { fontSize: 13, color: 'rgba(0,0,0,0.5)', textAlign: 'center', lineHeight: 19 },
+
+  retryBtn: {
+    backgroundColor: '#2563eb', paddingHorizontal: 16, paddingVertical: 8,
+    borderRadius: 20, marginTop: 4,
+  },
+  retryBtnText: { color: 'white', fontWeight: 'bold', fontSize: 13 },
 });

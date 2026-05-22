@@ -2,14 +2,19 @@ import { useEffect } from 'react';
 import { BackHandler } from 'react-native';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme } from '../../constants/theme';
 
 export default function TabLayout() {
+  const insets = useSafeAreaInsets();
+
   useEffect(() => {
     const onBackPress = () => true;
     const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
     return () => sub.remove();
   }, []);
+
+  const bottomInset = insets.bottom;
 
   return (
     <Tabs
@@ -19,8 +24,12 @@ export default function TabLayout() {
         tabBarStyle: {
           backgroundColor: theme.colors.surface,
           borderTopColor: theme.colors.border,
-          height: 60,
-          paddingBottom: 8,
+          height: 60 + bottomInset,
+          paddingBottom: 8 + bottomInset,
+          paddingTop: 6,
+        },
+        tabBarItemStyle: {
+          paddingVertical: 4,
         },
         tabBarLabelStyle: {
           fontSize: theme.fonts.sizes.xs,
@@ -47,7 +56,7 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="tv"
+        name="dash"
         options={{
           title: 'Dashboard',
           tabBarIcon: ({ color, size }) => (
