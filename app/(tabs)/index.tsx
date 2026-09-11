@@ -19,7 +19,7 @@ import AppAlert, { AppAlertVariant } from '../../components/AppAlert';
 
 function getSightingThumbnail(sighting: SightingResponse): string | null {
   if (sighting.imageUrl) return sighting.imageUrl;
-  const speciesImage = sighting.species.find((s) => s.species?.imageUrl)?.species?.imageUrl;
+  const speciesImage = sighting.species.find((s) => s.imageUrl)?.imageUrl;
   return speciesImage ?? null;
 }
 

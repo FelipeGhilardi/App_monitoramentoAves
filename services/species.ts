@@ -1,7 +1,7 @@
 import { apiFetch, ApiError } from './api';
 
 export interface SpeciesResponse {
-  id: number;
+  id: string;
   name: string;
   scientificName: string;
   description: string | null;

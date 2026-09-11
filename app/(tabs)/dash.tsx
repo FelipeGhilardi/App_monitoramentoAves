@@ -19,7 +19,7 @@ interface ChartPoint {
 }
 
 interface DashboardStats {
-  totalBirds: number;
+  totalSightings: number;
   uniqueSpecies: number;
   totalDelta: number | null;
   newSpecies: number;
@@ -60,14 +60,6 @@ function parseLocalDate(value: string): Date | null {
 function diffInDays(a: Date, b: Date): number {
   const ms = a.getTime() - b.getTime();
   return Math.floor(ms / (1000 * 60 * 60 * 24));
-}
-
-/** Soma a quantidade de aves de um avistamento. */
-function sumBirds(sighting: SightingResponse): number {
-  return sighting.species.reduce(
-    (acc, entry) => acc + (Number(entry.quantity) || 0),
-    0
-  );
 }
 
 /** Retorna o índice (0..5) do balde de horário mais próximo. */
@@ -137,20 +129,20 @@ function computeStats(
   const currentRange = filterByRange(sightings, periodStart, today);
   const previousRange = filterByRange(sightings, previousStart, previousEnd);
 
-  const totalBirds = currentRange.reduce((acc, s) => acc + sumBirds(s), 0);
-  const previousTotal = previousRange.reduce((acc, s) => acc + sumBirds(s), 0);
+  const totalSightings = currentRange.length;
+  const previousTotal = previousRange.length;
 
-  const currentSpeciesIds = new Set<number>();
+  const currentSpeciesIds = new Set<string>();
   currentRange.forEach((s) =>
-    s.species.forEach((entry) => {
-      if (entry.species?.id != null) currentSpeciesIds.add(entry.species.id);
+    s.species.forEach((sp) => {
+      if (sp.id != null) currentSpeciesIds.add(sp.id);
     })
   );
 
-  const previousSpeciesIds = new Set<number>();
+  const previousSpeciesIds = new Set<string>();
   previousRange.forEach((s) =>
-    s.species.forEach((entry) => {
-      if (entry.species?.id != null) previousSpeciesIds.add(entry.species.id);
+    s.species.forEach((sp) => {
+      if (sp.id != null) previousSpeciesIds.add(sp.id);
     })
   );
 
@@ -160,7 +152,7 @@ function computeStats(
 
   const totalDelta =
     previousTotal > 0
-      ? Math.round(((totalBirds - previousTotal) / previousTotal) * 100)
+      ? Math.round(((totalSightings - previousTotal) / previousTotal) * 100)
       : null;
 
   // Bar chart: 7 baldes sempre (um por dia em 7d, ou janelas iguais em 30/90d).
@@ -182,7 +174,7 @@ function computeStats(
       continue;
     }
     const slice = filterByRange(currentRange, start, end);
-    const value = slice.reduce((acc, s) => acc + sumBirds(s), 0);
+    const value = slice.length;
     const label =
       period === 7
         ? format(start, 'EEEEEE', { locale: ptBR })
@@ -197,11 +189,11 @@ function computeStats(
     const hour = Number(s.time.slice(0, 2));
     if (Number.isNaN(hour)) return;
     const idx = bucketIndexForHour(hour);
-    hourTotals[idx].value += sumBirds(s);
+    hourTotals[idx].value += 1;
   });
 
   return {
-    totalBirds,
+    totalSightings,
     uniqueSpecies: currentSpeciesIds.size,
     totalDelta,
     newSpecies,
@@ -433,7 +425,7 @@ export default function TVScreen() {
   };
 
   const renderTotalBadge = () => {
-    if (stats.totalBirds === 0) return undefined;
+    if (stats.totalSightings === 0) return undefined;
     if (stats.totalDelta === null) return 'Novo';
     const sign = stats.totalDelta >= 0 ? '+' : '';
     return `${sign}${stats.totalDelta}%`;
@@ -508,8 +500,8 @@ export default function TVScreen() {
                 <StatCard
                   icon="egg-outline"
                   iconBg="#f3f4f6"
-                  value={String(stats.totalBirds)}
-                  label="Total de Pássaros"
+                  value={String(stats.totalSightings)}
+                  label="Total de Avistamentos"
                   badge={renderTotalBadge()}
                   badgeTone={totalBadgeTone}
                 />

@@ -2,16 +2,20 @@ import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Endereço do backend Spring Boot.
-// - Android Emulator: 10.0.2.2 mapeia para o localhost da máquina host.
-// - iOS Simulator e Web: localhost funciona normalmente.
-// - Dispositivo físico: configure o IP em .env (EXPO_PUBLIC_API_IP)
+// - Produção/homologação: defina EXPO_PUBLIC_API_BASE_URL (ex.: https://api.exemplo.com)
+//   para apontar a um domínio real via HTTPS.
+// - Desenvolvimento local:
+//   - Android Emulator: 10.0.2.2 mapeia para o localhost da máquina host.
+//   - iOS Simulator e Web: localhost funciona normalmente.
+//   - Dispositivo físico: configure o IP em .env (EXPO_PUBLIC_API_IP)
 const DEV_HOST = Platform.select({
   android: process.env.EXPO_PUBLIC_API_IP || '10.0.2.2',
   ios: 'localhost',
   default: 'localhost',
 });
 
-export const API_BASE_URL = `http://${DEV_HOST}:8080`;
+export const API_BASE_URL =
+  process.env.EXPO_PUBLIC_API_BASE_URL || `http://${DEV_HOST}:8080`;
 
 const TOKEN_KEY = 'userToken';
 

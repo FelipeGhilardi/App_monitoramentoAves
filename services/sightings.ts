@@ -3,23 +3,20 @@ import { SpeciesResponse } from './species';
 
 export type { SpeciesResponse };
 
-export type Gender = 'MALE' | 'FEMALE' | 'UNKNOWN';
-
-export interface SightingSpeciesResponse {
-  id: number;
-  species: SpeciesResponse;
-  quantity: number;
-  gender: Gender;
-}
-
 export interface SightingResponse {
-  id: number;
-  species: SightingSpeciesResponse[];
+  id: string;
+  species: SpeciesResponse[];
   date: string;
   time: string;
   imageUrl: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+interface CursorPage<T> {
+  items: T[];
+  nextCursor: string | null;
+  hasMore: boolean;
 }
 
 export interface SightingsResult {
@@ -28,17 +25,40 @@ export interface SightingsResult {
   message?: string;
 }
 
+// Limite máximo de itens por página aceito pelo backend (app.sightings.max-page-size).
+const PAGE_LIMIT = 50;
+// Número máximo de páginas percorridas em uma única chamada, para evitar
+// requisições ilimitadas caso o backend acumule muito histórico.
+const MAX_PAGES = 20;
+
 /**
- * Busca todos os avistamentos do backend, já ordenados do mais
- * recente para o mais antigo (por data/hora de ocorrência).
+ * Busca avistamentos do backend (percorrendo páginas via cursor até o limite
+ * de segurança definido acima) e retorna já ordenados do mais recente para
+ * o mais antigo (por data/hora de ocorrência).
  */
 export async function fetchSightings(): Promise<SightingsResult> {
   try {
-    const data = await apiFetch<SightingResponse[]>('/api/sightings', {
-      method: 'GET',
-    });
+    const all: SightingResponse[] = [];
+    let cursor: string | null = null;
+    let hasMore = true;
+    let pages = 0;
 
-    const sorted = [...data].sort((a, b) => {
+    while (hasMore && pages < MAX_PAGES) {
+      const query = new URLSearchParams({ limit: String(PAGE_LIMIT) });
+      if (cursor) query.set('cursor', cursor);
+
+      const page = await apiFetch<CursorPage<SightingResponse>>(
+        `/api/sightings?${query.toString()}`,
+        { method: 'GET' }
+      );
+
+      all.push(...page.items);
+      cursor = page.nextCursor;
+      hasMore = page.hasMore && !!cursor;
+      pages += 1;
+    }
+
+    const sorted = [...all].sort((a, b) => {
       const dateA = combineDateTime(a.date, a.time);
       const dateB = combineDateTime(b.date, b.time);
       return dateB - dateA;
@@ -67,7 +87,7 @@ function combineDateTime(date: string, time: string): number {
  */
 export function getSightingTitle(sighting: SightingResponse): string {
   const names = sighting.species
-    .map((s) => s.species?.name)
+    .map((s) => s.name)
     .filter((n): n is string => !!n);
 
   if (names.length === 0) return 'Avistamento';

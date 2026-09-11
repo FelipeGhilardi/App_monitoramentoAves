@@ -1,13 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { sha256 } from '../utils/sha256';
 import { apiFetch, clearToken, getToken, setToken, ApiError } from './api';
 
-function hashPassword(plain: string): string {
-  return sha256(plain);
-}
-
 export interface UserResponse {
-  id: number;
+  id: string;
   name: string;
   email: string;
   createdAt: string;
@@ -35,10 +30,11 @@ export async function register(
   password: string
 ): Promise<AuthResult> {
   try {
-    const hashedPassword = hashPassword(password);
+    // Senha original enviada ao backend (que valida força e aplica BCrypt).
+    // Requer HTTPS fora do ambiente de desenvolvimento (ver EXPO_PUBLIC_API_BASE_URL em api.ts).
     await apiFetch<UserResponse>('/api/users', {
       method: 'POST',
-      body: JSON.stringify({ name, email, password: hashedPassword }),
+      body: JSON.stringify({ name, email, password }),
     });
     return { success: true };
   } catch (err) {
@@ -49,10 +45,9 @@ export async function register(
 
 export async function login(email: string, password: string): Promise<AuthResult> {
   try {
-    const hashedPassword = hashPassword(password);
     const data = await apiFetch<LoginResponse>('/api/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ email, password: hashedPassword }),
+      body: JSON.stringify({ email, password }),
     });
 
     await setToken(data.token);
@@ -160,7 +155,7 @@ export async function getCurrentUser(): Promise<UserResponse | null> {
   if (!id || !email) return null;
 
   return {
-    id: Number(id),
+    id,
     name: name ?? 'Usuário',
     email,
     createdAt: createdAt ?? '',
