@@ -1,21 +1,11 @@
-import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Endereço do backend Spring Boot.
-// - Produção/homologação: defina EXPO_PUBLIC_API_BASE_URL (ex.: https://api.exemplo.com)
-//   para apontar a um domínio real via HTTPS.
-// - Desenvolvimento local:
-//   - Android Emulator: 10.0.2.2 mapeia para o localhost da máquina host.
-//   - iOS Simulator e Web: localhost funciona normalmente.
-//   - Dispositivo físico: configure o IP em .env (EXPO_PUBLIC_API_IP)
-const DEV_HOST = Platform.select({
-  android: process.env.EXPO_PUBLIC_API_IP || '10.0.2.2',
-  ios: 'localhost',
-  default: 'localhost',
-});
-
+// Backend Aves publicado em AWS Lambda/API Gateway. O override permite usar
+// uma URL local ou de homologação sem alterar o código versionado.
+const DEPLOYED_API_BASE_URL =
+  'https://iofgiiaolc.execute-api.us-east-1.amazonaws.com';
 export const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_BASE_URL || `http://${DEV_HOST}:8080`;
+  process.env.EXPO_PUBLIC_API_BASE_URL || DEPLOYED_API_BASE_URL;
 
 const TOKEN_KEY = 'userToken';
 
