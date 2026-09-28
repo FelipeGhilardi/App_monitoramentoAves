@@ -1,5 +1,7 @@
 import { apiFetch, ApiError } from './api';
 import { SpeciesResponse } from './species';
+import { format, parseISO } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 export type { SpeciesResponse };
 
@@ -23,6 +25,34 @@ export interface SightingsResult {
   success: boolean;
   data?: SightingResponse[];
   message?: string;
+}
+
+export interface SightingDetailResult {
+  success: boolean;
+  data?: SightingResponse;
+  status?: number;
+  message?: string;
+}
+
+export async function fetchSightingById(id: string): Promise<SightingDetailResult> {
+  if (!id.trim()) {
+    return { success: false, status: 400, message: 'Avistamento inválido.' };
+  }
+
+  try {
+    const data = await apiFetch<SightingResponse>(
+      `/api/sightings/${encodeURIComponent(id)}`,
+      { method: 'GET' }
+    );
+    return { success: true, data };
+  } catch (err) {
+    const apiErr = err as ApiError;
+    return {
+      success: false,
+      status: apiErr.status,
+      message: apiErr.message ?? 'Erro ao carregar avistamento.',
+    };
+  }
 }
 
 // Limite máximo de itens por página aceito pelo backend (app.sightings.max-page-size).
@@ -93,4 +123,15 @@ export function getSightingTitle(sighting: SightingResponse): string {
   if (names.length === 0) return 'Avistamento';
   if (names.length === 1) return names[0];
   return `${names[0]} e mais ${names.length - 1}`;
+}
+
+export function formatSightingDate(sighting: SightingResponse): string {
+  try {
+    const safeTime = sighting.time && sighting.time.length >= 5
+      ? (sighting.time.length === 5 ? `${sighting.time}:00` : sighting.time)
+      : '00:00:00';
+    return format(parseISO(`${sighting.date}T${safeTime}`), "d 'de' MMM, HH:mm", { locale: ptBR });
+  } catch {
+    return sighting.date ?? '';
+  }
 }

@@ -1,17 +1,16 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, FlatList,
-  TouchableOpacity, Modal, TextInput, SafeAreaView, StatusBar, Alert,
+  TouchableOpacity, Modal, TextInput, SafeAreaView,
   ActivityIndicator,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { format, parseISO } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
 import { getCurrentUser, logout, updateProfile, UserResponse } from '../../services/auth';
 import {
   fetchSightings,
+  formatSightingDate,
   getSightingTitle,
   SightingResponse,
 } from '../../services/sightings';
@@ -21,18 +20,6 @@ function getSightingThumbnail(sighting: SightingResponse): string | null {
   if (sighting.imageUrl) return sighting.imageUrl;
   const speciesImage = sighting.species.find((s) => s.imageUrl)?.imageUrl;
   return speciesImage ?? null;
-}
-
-function formatSightingDate(sighting: SightingResponse): string {
-  try {
-    const safeTime = sighting.time && sighting.time.length >= 5
-      ? (sighting.time.length === 5 ? `${sighting.time}:00` : sighting.time)
-      : '00:00:00';
-    const dt = parseISO(`${sighting.date}T${safeTime}`);
-    return format(dt, "d 'de' MMM, HH:mm", { locale: ptBR });
-  } catch {
-    return sighting.date ?? '';
-  }
 }
 
 function NotificationsModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
@@ -217,10 +204,12 @@ function AllSightingsModal({
   visible,
   onClose,
   sightings,
+  onSelect,
 }: {
   visible: boolean;
   onClose: () => void;
   sightings: SightingResponse[];
+  onSelect: (id: string) => void;
 }) {
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
@@ -244,7 +233,7 @@ function AllSightingsModal({
             data={sightings}
             keyExtractor={(item) => String(item.id)}
             contentContainerStyle={modal.listContent}
-            renderItem={({ item }) => <SightingCard sighting={item} />}
+            renderItem={({ item }) => <SightingCard sighting={item} onPress={() => onSelect(item.id)} />}
             showsVerticalScrollIndicator={false}
           />
         )}
@@ -253,56 +242,19 @@ function AllSightingsModal({
   );
 }
 
-function LiveModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
-  return (
-    <Modal visible={visible} animationType="fade" statusBarTranslucent onRequestClose={onClose}>
-      <View style={liveStyle.container}>
-        <StatusBar barStyle="light-content" />
-        <Image
-          source={{ uri: 'https://images.unsplash.com/photo-1703142823953-bc43e35742ec?w=800' }}
-          style={StyleSheet.absoluteFillObject}
-          contentFit="cover"
-        />
-        <View style={liveStyle.header}>
-          <View style={liveStyle.liveBadge}>
-            <View style={liveStyle.liveDot} />
-            <Text style={liveStyle.liveText}>AO VIVO</Text>
-          </View>
-          <Text style={liveStyle.feederName}>Comedouro Principal</Text>
-          <TouchableOpacity onPress={onClose} style={liveStyle.closeBtn}>
-            <Ionicons name="close" size={22} color="white" />
-          </TouchableOpacity>
-        </View>
-        <View style={liveStyle.crosshair}>
-          <View style={[liveStyle.corner, { top: 0, left: 0, borderRightWidth: 0, borderBottomWidth: 0 }]} />
-          <View style={[liveStyle.corner, { top: 0, right: 0, borderLeftWidth: 0, borderBottomWidth: 0 }]} />
-          <View style={[liveStyle.corner, { bottom: 0, left: 0, borderRightWidth: 0, borderTopWidth: 0 }]} />
-          <View style={[liveStyle.corner, { bottom: 0, right: 0, borderLeftWidth: 0, borderTopWidth: 0 }]} />
-        </View>
-        <View style={liveStyle.controls}>
-          <TouchableOpacity style={liveStyle.controlBtn}>
-            <Ionicons name="mic-outline" size={22} color="white" />
-          </TouchableOpacity>
-          <TouchableOpacity style={liveStyle.captureBtn}>
-            <Ionicons name="camera" size={28} color="#000" />
-          </TouchableOpacity>
-          <TouchableOpacity style={liveStyle.endBtn} onPress={onClose}>
-            <Ionicons name="call" size={22} color="#ef4444" />
-          </TouchableOpacity>
-        </View>
-      </View>
-    </Modal>
-  );
-}
-
-function SightingCard({ sighting }: { sighting: SightingResponse }) {
+function SightingCard({ sighting, onPress }: { sighting: SightingResponse; onPress: () => void }) {
   const thumbnail = getSightingThumbnail(sighting);
   const title = getSightingTitle(sighting);
   const date = formatSightingDate(sighting);
 
   return (
-    <View style={styles.videoCard}>
-      <View style={styles.videoThumb}>
+    <TouchableOpacity
+      style={styles.sightingCard}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`Ver avistamento: ${title}`}
+    >
+      <View style={styles.sightingThumb}>
         {thumbnail ? (
           <Image
             source={{ uri: thumbnail }}
@@ -315,14 +267,14 @@ function SightingCard({ sighting }: { sighting: SightingResponse }) {
           </View>
         )}
       </View>
-      <View style={styles.videoInfo}>
-        <Text style={styles.videoTitle} numberOfLines={2}>{title}</Text>
+      <View style={styles.sightingInfo}>
+        <Text style={styles.sightingTitle} numberOfLines={2}>{title}</Text>
         <View style={styles.metaRow}>
           <Ionicons name="calendar-outline" size={13} color="rgba(0,0,0,0.5)" />
           <Text style={styles.metaText}>{date}</Text>
         </View>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 
@@ -331,7 +283,6 @@ export default function HomeScreen() {
   const [showNotif, setShowNotif] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
-  const [showLive, setShowLive] = useState(false);
   const [showAllSightings, setShowAllSightings] = useState(false);
   const [sightings, setSightings] = useState<SightingResponse[]>([]);
   const [loadingSightings, setLoadingSightings] = useState(true);
@@ -374,6 +325,10 @@ export default function HomeScreen() {
   };
 
   const latestSightings = sightings.slice(0, 5);
+  const openSighting = (id: string) => {
+    setShowAllSightings(false);
+    router.push({ pathname: '/sightings/[id]', params: { id } });
+  };
 
   return (
     <View style={styles.container}>
@@ -409,19 +364,6 @@ export default function HomeScreen() {
             Acompanhe os pássaros do seu comedouro a qualquer momento.
           </Text>
 
-          {/* Live Button */}
-          <TouchableOpacity style={styles.liveBtn} onPress={() => Alert.alert('Indisponível', 'A transmissão em tempo real está indisponível no momento.')} activeOpacity={0.85}>
-            <View style={styles.liveBtnIcon}>
-              <Ionicons name="videocam" size={26} color="white" />
-            </View>
-            <View style={styles.liveBtnTexts}>
-              <Text style={styles.liveBtnTitle}>Gravação em Tempo Real</Text>
-              <Text style={styles.liveBtnSub}>Acessar câmera ao vivo</Text>
-            </View>
-            <View style={styles.liveBtnPlay}>
-              <Ionicons name="play" size={18} color="#000" />
-            </View>
-          </TouchableOpacity>
         </View>
 
         <View style={styles.divider} />
@@ -462,7 +404,7 @@ export default function HomeScreen() {
             </View>
           ) : (
             latestSightings.map((sighting) => (
-              <SightingCard key={sighting.id} sighting={sighting} />
+              <SightingCard key={sighting.id} sighting={sighting} onPress={() => openSighting(sighting.id)} />
             ))
           )}
         </View>
@@ -486,8 +428,8 @@ export default function HomeScreen() {
         visible={showAllSightings}
         onClose={() => setShowAllSightings(false)}
         sightings={sightings}
+        onSelect={openSighting}
       />
-      <LiveModal visible={showLive} onClose={() => setShowLive(false)} />
     </View>
   );
 }
@@ -520,24 +462,6 @@ const styles = StyleSheet.create({
   heroTitle: { fontSize: 34, fontWeight: 'bold', color: '#000', textAlign: 'center', lineHeight: 40, marginBottom: 10 },
   heroSubtitle: { fontSize: 14, color: 'rgba(0,0,0,0.6)', textAlign: 'center', lineHeight: 20, marginBottom: 24 },
 
-  liveBtn: {
-    width: '100%', backgroundColor: '#dbeafe',
-    borderRadius: 20, padding: 16,
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-  },
-  liveBtnIcon: {
-    width: 52, height: 52, borderRadius: 26,
-    backgroundColor: '#3b82f6', alignItems: 'center', justifyContent: 'center',
-  },
-  liveBtnTexts: { flex: 1 },
-  liveBtnTitle: { fontSize: 16, fontWeight: 'bold', color: '#000' },
-  liveBtnSub: { fontSize: 12, color: 'rgba(0,0,0,0.6)', marginTop: 2 },
-  liveBtnPlay: {
-    width: 36, height: 36, borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.5)',
-    alignItems: 'center', justifyContent: 'center',
-  },
-
   divider: { height: 4, backgroundColor: '#e5e7eb', marginVertical: 20 },
 
   section: { paddingHorizontal: 20 },
@@ -546,18 +470,18 @@ const styles = StyleSheet.create({
   sectionSub: { fontSize: 13, color: 'rgba(0,0,0,0.5)', marginTop: 2 },
   seeAll: { fontSize: 13, fontWeight: 'bold', color: '#000' },
 
-  videoCard: {
+  sightingCard: {
     backgroundColor: 'white', borderRadius: 16,
     flexDirection: 'row', marginBottom: 12,
     overflow: 'hidden', padding: 10, gap: 12,
     shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 2,
   },
-  videoThumb: { width: 120, height: 80, borderRadius: 10, overflow: 'hidden', backgroundColor: '#f3f4f6' },
+  sightingThumb: { width: 120, height: 80, borderRadius: 10, overflow: 'hidden', backgroundColor: '#f3f4f6' },
   thumbPlaceholder: {
     alignItems: 'center', justifyContent: 'center', backgroundColor: '#f3f4f6',
   },
-  videoInfo: { flex: 1, justifyContent: 'center', gap: 4 },
-  videoTitle: { fontSize: 13, fontWeight: 'bold', color: '#000' },
+  sightingInfo: { flex: 1, justifyContent: 'center', gap: 4 },
+  sightingTitle: { fontSize: 13, fontWeight: 'bold', color: '#000' },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   metaText: { fontSize: 11, color: 'rgba(0,0,0,0.5)' },
 
@@ -630,48 +554,4 @@ const modal = StyleSheet.create({
   },
   emptyTitle: { fontSize: 17, fontWeight: 'bold', color: '#000', marginTop: 6 },
   emptyText: { fontSize: 13, color: 'rgba(0,0,0,0.5)', textAlign: 'center', lineHeight: 19 },
-});
-
-const liveStyle = StyleSheet.create({
-  container: { flex: 1, backgroundColor: 'black' },
-  header: {
-    position: 'absolute', top: 0, left: 0, right: 0,
-    flexDirection: 'row', alignItems: 'center',
-    paddingTop: 56, paddingHorizontal: 16, paddingBottom: 16,
-    backgroundColor: 'rgba(0,0,0,0.4)', zIndex: 10, gap: 10,
-  },
-  liveBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: '#dc2626', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6,
-  },
-  liveDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: 'white' },
-  liveText: { color: 'white', fontSize: 11, fontWeight: 'bold' },
-  feederName: { flex: 1, color: 'white', fontSize: 13, fontWeight: '500' },
-  closeBtn: { backgroundColor: 'rgba(0,0,0,0.4)', padding: 8, borderRadius: 20 },
-  crosshair: {
-    position: 'absolute', top: '50%', left: '50%',
-    width: 160, height: 160, marginTop: -80, marginLeft: -80,
-  },
-  corner: {
-    position: 'absolute', width: 16, height: 16,
-    borderColor: 'rgba(255,255,255,0.6)', borderWidth: 2,
-  },
-  controls: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
-    backgroundColor: '#111', paddingVertical: 24, paddingBottom: 40,
-    flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 32,
-  },
-  controlBtn: {
-    width: 46, height: 46, borderRadius: 23,
-    backgroundColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center',
-  },
-  captureBtn: {
-    width: 60, height: 60, borderRadius: 30, backgroundColor: 'white',
-    alignItems: 'center', justifyContent: 'center',
-    borderWidth: 3, borderColor: 'rgba(255,255,255,0.3)',
-  },
-  endBtn: {
-    width: 46, height: 46, borderRadius: 23,
-    backgroundColor: 'rgba(239,68,68,0.2)', alignItems: 'center', justifyContent: 'center',
-  },
 });

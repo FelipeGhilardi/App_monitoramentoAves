@@ -1,18 +1,19 @@
 import { useEffect } from 'react';
 import { BackHandler } from 'react-native';
-import { Tabs } from 'expo-router';
+import { Tabs, usePathname } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme } from '../../constants/theme';
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
+  const pathname = usePathname();
 
   useEffect(() => {
-    const onBackPress = () => true;
+    const onBackPress = () => !pathname.startsWith('/sightings/');
     const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
     return () => sub.remove();
-  }, []);
+  }, [pathname]);
 
   const bottomInset = insets.bottom;
 

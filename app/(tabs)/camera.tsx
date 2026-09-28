@@ -6,7 +6,7 @@ const features = [
   'Identificação automática de espécies',
   'Histórico de avistamentos',
   'Estatísticas de visitação',
-  'Vídeos e imagens registrados',
+  'Imagens dos avistamentos registrados',
   'Relatórios em tempo real',
 ];
 
@@ -99,7 +99,7 @@ export default function CameraScreen() {
           emoji="📱"
           title="Aplicativo Mobile"
           subtitle="Informações em tempo real"
-          description="O aplicativo permite acompanhar transmissões, acessar registros das aves identificadas e visualizar estatísticas sobre a biodiversidade monitorada."
+          description="O aplicativo permite consultar imagens dos avistamentos, acessar registros das aves identificadas e visualizar estatísticas sobre a biodiversidade monitorada."
         />
 
         <InfoCard
