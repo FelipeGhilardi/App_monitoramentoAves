@@ -25,15 +25,17 @@ export default function TabLayout() {
         tabBarStyle: {
           backgroundColor: theme.colors.surface,
           borderTopColor: theme.colors.border,
-          height: 60 + bottomInset,
+          height: 68 + bottomInset,
           paddingBottom: 8 + bottomInset,
           paddingTop: 6,
         },
         tabBarItemStyle: {
           paddingVertical: 4,
+          minHeight: theme.touchTarget,
         },
         tabBarLabelStyle: {
           fontSize: theme.fonts.sizes.xs,
+          fontWeight: '600',
         },
         headerShown: false,
       }}
@@ -41,9 +43,9 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Home',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="home-outline" size={size} color={color} />
+          title: 'Início',
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons name={focused ? 'home' : 'home-outline'} size={size} color={color} />
           ),
         }}
       />
@@ -51,29 +53,29 @@ export default function TabLayout() {
         name="collection"
         options={{
           title: 'Coleção',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="bookmark-outline" size={size} color={color} />
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons name={focused ? 'bookmark' : 'bookmark-outline'} size={size} color={color} />
           ),
         }}
       />
       <Tabs.Screen
         name="dash"
         options={{
-          title: 'Dashboard',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="stats-chart-outline" size={size} color={color} />
+          title: 'Estatísticas',
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons name={focused ? 'stats-chart' : 'stats-chart-outline'} size={size} color={color} />
           ),
         }}
       />
       <Tabs.Screen
-  name="camera"
-  options={{
-    title: 'Sobre Nós',
-    tabBarIcon: ({ color, size }) => (
-      <Ionicons name="information-circle-outline" size={size} color={color} />
-    ),
-  }}
-    />
+        name="camera"
+        options={{
+          title: 'Sobre',
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons name={focused ? 'information-circle' : 'information-circle-outline'} size={size} color={color} />
+          ),
+        }}
+      />
     </Tabs>
   );
 }

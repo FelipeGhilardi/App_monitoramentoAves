@@ -1,22 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Dimensions, ActivityIndicator,
+  View, Text, StyleSheet, ScrollView, Pressable, useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { fetchSightings, SightingResponse } from '../../services/sightings';
-
-const { width } = Dimensions.get('window');
-const chartWidth = width - 64;
+import { theme } from '../../constants/theme';
+import ActivityChart, { ChartPoint } from '../../components/ActivityChart';
+import IconButton from '../../components/IconButton';
+import ScreenHeader from '../../components/ScreenHeader';
+import ScreenState from '../../components/ScreenState';
 
 type PeriodDays = 7 | 30 | 90;
-
-interface ChartPoint {
-  label: string;
-  value: number;
-}
 
 interface DashboardStats {
   totalSightings: number;
@@ -34,7 +30,7 @@ const PERIOD_LABELS: Record<PeriodDays, string> = {
   90: 'Últimos 90 dias',
 };
 
-const PERIOD_CYCLE: PeriodDays[] = [7, 30, 90];
+const PERIOD_OPTIONS: PeriodDays[] = [7, 30, 90];
 
 const HOUR_BUCKETS: { label: string; hour: number }[] = [
   { label: '06h', hour: 6 },
@@ -69,26 +65,6 @@ function bucketIndexForHour(hour: number): number {
   if (idx < 0) return 0;
   if (idx > HOUR_BUCKETS.length - 1) return HOUR_BUCKETS.length - 1;
   return idx;
-}
-
-/** Arredonda um valor máximo para um "nice number" próximo. */
-function niceCeil(value: number): number {
-  if (value <= 0) return 5;
-  const exp = Math.floor(Math.log10(value));
-  const pow = Math.pow(10, exp);
-  const norm = value / pow;
-  let nice: number;
-  if (norm <= 1) nice = 1;
-  else if (norm <= 2) nice = 2;
-  else if (norm <= 5) nice = 5;
-  else nice = 10;
-  return nice * pow;
-}
-
-/** Gera 5 labels do eixo Y a partir do valor máximo (0..maxNice). */
-function buildYAxis(maxValue: number): number[] {
-  const top = Math.max(niceCeil(maxValue), 4);
-  return [0, 1, 2, 3, 4].map((i) => Math.round((top * i) / 4));
 }
 
 /**
@@ -203,156 +179,6 @@ function computeStats(
   };
 }
 
-function BarChart({ data }: { data: ChartPoint[] }) {
-  const [tooltip, setTooltip] = useState<number | null>(null);
-  const chartHeight = 180;
-  const yLabels = buildYAxis(Math.max(...data.map((d) => d.value), 0));
-  const topValue = yLabels[yLabels.length - 1];
-  const yReversed = [...yLabels].reverse();
-
-  return (
-    <View>
-      <View style={{ flexDirection: 'row' }}>
-        <View style={{ width: 28, height: chartHeight, justifyContent: 'space-between', alignItems: 'flex-end', paddingRight: 4 }}>
-          {yReversed.map((l, i) => (
-            <Text key={`${l}-${i}`} style={chart.axisLabel}>{l}</Text>
-          ))}
-        </View>
-
-        <View style={{ flex: 1, height: chartHeight, position: 'relative' }}>
-          {yReversed.map((_, i) => (
-            <View key={i} style={[chart.gridLine, { top: (i / (yReversed.length - 1)) * chartHeight }]} />
-          ))}
-
-          <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: chartHeight, gap: 4 }}>
-            {data.map((item, i) => {
-              const ratio = topValue > 0 ? item.value / topValue : 0;
-              const barH = Math.max(ratio * (chartHeight - 20), item.value > 0 ? 4 : 0);
-              const isSelected = tooltip === i;
-              return (
-                <TouchableOpacity
-                  key={i}
-                  style={{ flex: 1, alignItems: 'center', justifyContent: 'flex-end', height: chartHeight }}
-                  onPress={() => setTooltip(isSelected ? null : i)}
-                  activeOpacity={0.7}
-                >
-                  <View style={[
-                    chart.bar,
-                    { height: barH, backgroundColor: isSelected ? '#6b7280' : '#1f2937' },
-                  ]} />
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          {tooltip !== null && (
-            <View style={[chart.tooltip, {
-              left: Math.min(Math.max((tooltip / data.length) * (chartWidth - 28) - 30, 0), chartWidth - 150),
-              top: 10,
-            }]}>
-              <Text style={chart.tooltipTitle}>{data[tooltip].label}</Text>
-              <Text style={chart.tooltipValue}>
-                {data[tooltip].value} {data[tooltip].value === 1 ? 'ave' : 'aves'}
-              </Text>
-            </View>
-          )}
-        </View>
-      </View>
-
-      <View style={{ flexDirection: 'row', paddingLeft: 28, marginTop: 6 }}>
-        {data.map((item, i) => (
-          <Text key={i} style={[chart.axisLabel, { flex: 1, textAlign: 'center' }]}>{item.label}</Text>
-        ))}
-      </View>
-    </View>
-  );
-}
-
-function LineChart({ data }: { data: ChartPoint[] }) {
-  const [tooltip, setTooltip] = useState<number | null>(null);
-  const chartHeight = 140;
-  const pointSpacing = (chartWidth - 28) / Math.max(data.length - 1, 1);
-
-  const maxValue = Math.max(...data.map((d) => d.value), 0);
-  const yLabels = buildYAxis(maxValue);
-  const topValue = yLabels[yLabels.length - 1];
-  const yReversed = [...yLabels].reverse();
-
-  const getY = (value: number) => {
-    if (topValue <= 0) return chartHeight - 10;
-    const ratio = value / topValue;
-    return chartHeight - ratio * (chartHeight - 20) - 10;
-  };
-
-  const points = data.map((d, i) => ({
-    x: i * pointSpacing,
-    y: getY(d.value),
-    label: d.label,
-    value: d.value,
-  }));
-
-  return (
-    <View>
-      <View style={{ flexDirection: 'row' }}>
-        <View style={{ width: 28, height: chartHeight, justifyContent: 'space-between', alignItems: 'flex-end', paddingRight: 4 }}>
-          {yReversed.map((l, i) => (
-            <Text key={`${l}-${i}`} style={chart.axisLabel}>{l}</Text>
-          ))}
-        </View>
-
-        <View style={{ flex: 1, height: chartHeight, position: 'relative' }}>
-          {yReversed.map((_, i) => (
-            <View key={i} style={[chart.gridLine, { top: (i / (yReversed.length - 1)) * chartHeight }]} />
-          ))}
-
-          {points.slice(0, -1).map((point, i) => {
-            const next = points[i + 1];
-            const dx = next.x - point.x;
-            const dy = next.y - point.y;
-            const length = Math.sqrt(dx * dx + dy * dy);
-            const angle = Math.atan2(dy, dx) * (180 / Math.PI);
-            return (
-              <View key={i} style={[chart.line, {
-                width: length,
-                left: point.x,
-                top: point.y,
-                transform: [{ rotate: `${angle}deg` }],
-              }]} />
-            );
-          })}
-
-          {points.map((point, i) => (
-            <TouchableOpacity
-              key={i}
-              style={[chart.point, { left: point.x - 6, top: point.y - 6 }]}
-              onPress={() => setTooltip(tooltip === i ? null : i)}
-              activeOpacity={0.7}
-            />
-          ))}
-
-          {tooltip !== null && (
-            <View style={[chart.tooltip, {
-              left: Math.min(Math.max(points[tooltip].x - 40, 0), chartWidth - 150),
-              top: Math.max(points[tooltip].y - 50, 0),
-            }]}>
-              <Text style={chart.tooltipTitle}>{points[tooltip].label}</Text>
-              <Text style={chart.tooltipValue}>
-                {points[tooltip].value} {points[tooltip].value === 1 ? 'ave' : 'aves'}
-              </Text>
-            </View>
-          )}
-        </View>
-      </View>
-
-      <View style={{ flexDirection: 'row', paddingLeft: 28, marginTop: 6 }}>
-        {data.map((item, i) => (
-          <Text key={i} style={[chart.axisLabel, { flex: 1, textAlign: 'center' }]}>{item.label}</Text>
-        ))}
-      </View>
-    </View>
-  );
-}
-
 function StatCard({
   icon,
   iconBg,
@@ -361,7 +187,7 @@ function StatCard({
   badge,
   badgeTone = 'positive',
 }: {
-  icon: string;
+  icon: keyof typeof Ionicons.glyphMap;
   iconBg: string;
   value: string;
   label: string;
@@ -369,15 +195,16 @@ function StatCard({
   badgeTone?: 'positive' | 'negative' | 'neutral';
 }) {
   const badgePalette = {
-    positive: { bg: '#eff6ff', color: '#2563eb', icon: 'trending-up' as const },
-    negative: { bg: '#fef2f2', color: '#dc2626', icon: 'trending-down' as const },
-    neutral: { bg: '#f3f4f6', color: '#4b5563', icon: 'remove-outline' as const },
+    positive: { bg: theme.colors.infoSurface, color: theme.colors.primary, icon: 'trending-up' as const },
+    negative: { bg: theme.colors.dangerSurface, color: theme.colors.danger, icon: 'trending-down' as const },
+    neutral: { bg: theme.colors.background, color: theme.colors.textSecondary, icon: 'remove-outline' as const },
   }[badgeTone];
+  const { fontScale } = useWindowDimensions();
 
   return (
-    <View style={styles.statCard}>
+    <View accessible accessibilityLabel={`${label}: ${value}${badge ? `, ${badge}` : ''}`} style={[styles.statCard, { flexBasis: 144 * fontScale }]}>
       <View style={[styles.statIcon, { backgroundColor: iconBg }]}>
-        <Ionicons name={icon as any} size={20} color="#000" />
+        <Ionicons name={icon} size={24} color={theme.colors.primary} />
       </View>
       <Text style={styles.statValue}>{value}</Text>
       <Text style={styles.statLabel}>{label}</Text>
@@ -391,7 +218,7 @@ function StatCard({
   );
 }
 
-export default function TVScreen() {
+export default function StatisticsScreen() {
   const [sightings, setSightings] = useState<SightingResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -419,11 +246,6 @@ export default function TVScreen() {
 
   const stats = useMemo(() => computeStats(sightings, period), [sightings, period]);
 
-  const cyclePeriod = () => {
-    const idx = PERIOD_CYCLE.indexOf(period);
-    setPeriod(PERIOD_CYCLE[(idx + 1) % PERIOD_CYCLE.length]);
-  };
-
   const renderTotalBadge = () => {
     if (stats.totalSightings === 0) return undefined;
     if (stats.totalDelta === null) return 'Novo';
@@ -449,57 +271,33 @@ export default function TVScreen() {
 
   return (
     <View style={styles.container}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: theme.spacing.lg }}>
 
-        <View style={styles.header}>
-          <View style={styles.headerTop}>
-            <Text style={styles.headerTitle}>Dashboard</Text>
-            <TouchableOpacity
-              style={styles.refreshBtn}
-              onPress={() => loadSightings(true)}
-              disabled={loading || refreshing}
-            >
-              {refreshing ? (
-                <ActivityIndicator color="white" size="small" />
-              ) : (
-                <Ionicons name="refresh" size={20} color="white" />
-              )}
-            </TouchableOpacity>
-          </View>
+        <ScreenHeader title="Estatísticas" subtitle={PERIOD_LABELS[period]}
+          actions={<IconButton icon="refresh" label="Atualizar estatísticas" onPress={() => loadSightings(true)} disabled={loading} loading={refreshing} />}
+        >
           <View style={styles.headerFilters}>
-            <TouchableOpacity
-              style={styles.filterChip}
-              onPress={cyclePeriod}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="calendar-outline" size={14} color="white" />
-              <Text style={styles.filterChipText}>{PERIOD_LABELS[period]}</Text>
-              <Ionicons name="chevron-down" size={12} color="white" />
-            </TouchableOpacity>
+            {PERIOD_OPTIONS.map((days) => (
+              <Pressable key={days} accessibilityRole="button" accessibilityLabel={PERIOD_LABELS[days]} accessibilityState={{ selected: period === days }}
+                style={[styles.filterChip, period === days && styles.filterChipSelected]} onPress={() => setPeriod(days)}>
+                <Text style={[styles.filterChipText, period === days && styles.filterChipSelectedText]}>{days} dias</Text>
+              </Pressable>
+            ))}
           </View>
-        </View>
+        </ScreenHeader>
 
         <View style={styles.content}>
 
           {loading ? (
-            <View style={styles.statusBox}>
-              <ActivityIndicator color="#2563eb" />
-              <Text style={styles.statusText}>Carregando dashboard...</Text>
-            </View>
+            <ScreenState loading title="Carregando estatísticas..." />
           ) : error ? (
-            <View style={styles.statusBox}>
-              <Ionicons name="cloud-offline-outline" size={32} color="rgba(0,0,0,0.4)" />
-              <Text style={styles.statusText}>{error}</Text>
-              <TouchableOpacity style={styles.retryBtn} onPress={() => loadSightings()}>
-                <Text style={styles.retryBtnText}>Tentar novamente</Text>
-              </TouchableOpacity>
-            </View>
+            <ScreenState title="Não foi possível carregar" message={error} icon="cloud-offline-outline" actionLabel="Tentar novamente" onAction={() => loadSightings()} />
           ) : (
             <>
               <View style={styles.statsGrid}>
                 <StatCard
                   icon="egg-outline"
-                  iconBg="#f3f4f6"
+                  iconBg={theme.colors.background}
                   value={String(stats.totalSightings)}
                   label="Total de Avistamentos"
                   badge={renderTotalBadge()}
@@ -507,7 +305,7 @@ export default function TVScreen() {
                 />
                 <StatCard
                   icon="pulse-outline"
-                  iconBg="#dbeafe"
+                  iconBg={theme.colors.primaryLight}
                   value={String(stats.uniqueSpecies)}
                   label="Espécies Diferentes"
                   badge={renderSpeciesBadge()}
@@ -516,19 +314,12 @@ export default function TVScreen() {
               </View>
 
               {!stats.hasData ? (
-                <View style={styles.emptyCard}>
-                  <Ionicons name="leaf-outline" size={36} color="rgba(0,0,0,0.3)" />
-                  <Text style={styles.emptyTitle}>Sem avistamentos no período</Text>
-                  <Text style={styles.emptyText}>
-                    Não há avistamentos registrados nos {period} dias selecionados.
-                    Tente outro período ou registre novos avistamentos.
-                  </Text>
-                </View>
+                <ScreenState title="Sem avistamentos no período" message={`Não há avistamentos registrados nos ${period} dias selecionados. Tente outro período.`} />
               ) : (
                 <>
                   <View style={styles.chartCard}>
                     <View style={styles.chartHeader}>
-                      <View>
+                      <View style={styles.chartTitles}>
                         <Text style={styles.chartTitle}>Visitas por período</Text>
                         <Text style={styles.chartSubtitle}>
                           {period === 7
@@ -536,26 +327,26 @@ export default function TVScreen() {
                             : `Distribuição em 7 janelas (últimos ${period} dias)`}
                         </Text>
                       </View>
-                      <View style={styles.chartIconBtn}>
-                        <Ionicons name="bar-chart-outline" size={16} color="#000" />
+                      <View style={styles.chartIcon}>
+                        <Ionicons name="bar-chart-outline" size={20} color={theme.colors.primary} />
                       </View>
                     </View>
-                    <BarChart data={stats.weekData} />
+                    <ActivityChart key={`period-${period}`} title="Visitas por período" data={stats.weekData} variant="bar" />
                   </View>
 
                   <View style={styles.chartCard}>
                     <View style={styles.chartHeader}>
-                      <View>
+                      <View style={styles.chartTitles}>
                         <Text style={styles.chartTitle}>Horários de pico</Text>
                         <Text style={styles.chartSubtitle}>
-                          Aves avistadas por faixa horária
+                          Avistamentos por faixa horária
                         </Text>
                       </View>
-                      <View style={[styles.chartIconBtn, { backgroundColor: '#dbeafe' }]}>
-                        <Ionicons name="time-outline" size={16} color="#000" />
+                      <View style={styles.chartIcon}>
+                        <Ionicons name="time-outline" size={20} color={theme.colors.primary} />
                       </View>
                     </View>
-                    <LineChart data={stats.hourData} />
+                    <ActivityChart key={`hours-${period}`} title="Horários de pico" data={stats.hourData} variant="line" />
                   </View>
                 </>
               )}
@@ -569,116 +360,35 @@ export default function TVScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f3f4f6' },
-
-  header: {
-    backgroundColor: '#000',
-    paddingTop: 56, paddingBottom: 28,
-    paddingHorizontal: 20,
-    borderBottomLeftRadius: 28, borderBottomRightRadius: 28,
-  },
-  headerTop: {
-    flexDirection: 'row', justifyContent: 'space-between',
-    alignItems: 'center', marginBottom: 16,
-  },
-  headerTitle: { fontSize: 28, fontWeight: 'bold', color: 'white' },
-  refreshBtn: {
-    width: 36, height: 36, borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  headerFilters: { flexDirection: 'row', gap: 10, flexWrap: 'wrap' },
-  filterChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: '#1f2937',
-    paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10,
-  },
-  filterChipText: { color: 'white', fontSize: 13, fontWeight: '500' },
-
-  content: { padding: 16, gap: 16, marginTop: -8 },
-
-  statsGrid: { flexDirection: 'row', gap: 12 },
+  container: { flex: 1, backgroundColor: theme.colors.background },
+  headerFilters: { flexDirection: 'row', gap: theme.spacing.sm, flexWrap: 'wrap' },
+  filterChip: { minHeight: theme.touchTarget, justifyContent: 'center', paddingHorizontal: theme.spacing.md, paddingVertical: theme.spacing.sm, borderRadius: theme.radius.md, backgroundColor: theme.colors.background },
+  filterChipSelected: { backgroundColor: theme.colors.primary },
+  filterChipText: { color: theme.colors.textSecondary, fontSize: theme.fonts.sizes.sm, fontWeight: '600' },
+  filterChipSelectedText: { color: theme.colors.textLight },
+  content: { padding: theme.spacing.md, gap: theme.spacing.md },
+  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   statCard: {
-    flex: 1, backgroundColor: 'white', borderRadius: 20,
-    padding: 18, shadowColor: '#000', shadowOpacity: 0.06,
-    shadowRadius: 6, elevation: 3, gap: 4,
+    flexGrow: 1, backgroundColor: theme.colors.surface, borderRadius: theme.radius.lg,
+    padding: theme.spacing.md, gap: theme.spacing.xs,
+    borderWidth: StyleSheet.hairlineWidth, borderColor: theme.colors.border,
   },
   statIcon: {
     width: 40, height: 40, borderRadius: 20,
     alignItems: 'center', justifyContent: 'center', marginBottom: 8,
   },
-  statValue: { fontSize: 30, fontWeight: 'bold', color: '#000' },
-  statLabel: { fontSize: 12, color: 'rgba(0,0,0,0.5)', fontWeight: '500' },
+  statValue: { fontSize: theme.fonts.sizes.xxl, fontWeight: '700', color: theme.colors.textPrimary },
+  statLabel: { fontSize: theme.fonts.sizes.sm, color: theme.colors.textSecondary },
   statBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 3,
     paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8,
-    alignSelf: 'flex-start', marginTop: 6,
+    alignSelf: 'flex-start', marginTop: 6, flexWrap: 'wrap',
   },
-  statBadgeText: { fontSize: 11, fontWeight: 'bold' },
-
-  chartCard: {
-    backgroundColor: 'white', borderRadius: 20, padding: 16,
-    shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 6, elevation: 3,
-  },
-  chartHeader: {
-    flexDirection: 'row', justifyContent: 'space-between',
-    alignItems: 'center', marginBottom: 16,
-  },
-  chartTitle: { fontSize: 16, fontWeight: 'bold', color: '#000' },
-  chartSubtitle: { fontSize: 11, color: 'rgba(0,0,0,0.5)', marginTop: 2 },
-  chartIconBtn: {
-    width: 32, height: 32, borderRadius: 16,
-    backgroundColor: '#f3f4f6', alignItems: 'center', justifyContent: 'center',
-  },
-
-  statusBox: {
-    backgroundColor: 'white', borderRadius: 20, padding: 28,
-    alignItems: 'center', justifyContent: 'center', gap: 10,
-    shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 2,
-  },
-  statusText: { fontSize: 13, color: 'rgba(0,0,0,0.6)', textAlign: 'center' },
-  retryBtn: {
-    backgroundColor: '#2563eb', paddingHorizontal: 16, paddingVertical: 8,
-    borderRadius: 20, marginTop: 4,
-  },
-  retryBtnText: { color: 'white', fontWeight: 'bold', fontSize: 13 },
-
-  emptyCard: {
-    backgroundColor: 'white', borderRadius: 20, padding: 28,
-    alignItems: 'center', justifyContent: 'center', gap: 8,
-    shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 2,
-  },
-  emptyTitle: { fontSize: 15, fontWeight: 'bold', color: '#000', marginTop: 6 },
-  emptyText: {
-    fontSize: 12, color: 'rgba(0,0,0,0.5)',
-    textAlign: 'center', lineHeight: 18,
-  },
-});
-
-const chart = StyleSheet.create({
-  axisLabel: { fontSize: 10, color: 'rgba(0,0,0,0.4)' },
-  gridLine: {
-    position: 'absolute', left: 0, right: 0,
-    height: 1, backgroundColor: '#f0f0f0',
-  },
-  bar: { width: '100%', borderTopLeftRadius: 4, borderTopRightRadius: 4 },
-  line: {
-    position: 'absolute', height: 3,
-    backgroundColor: '#3b82f6', borderRadius: 2,
-    transformOrigin: 'left center',
-  },
-  point: {
-    position: 'absolute', width: 12, height: 12,
-    borderRadius: 6, backgroundColor: '#3b82f6',
-    borderWidth: 2, borderColor: 'white',
-  },
-  tooltip: {
-    position: 'absolute', backgroundColor: 'white',
-    borderRadius: 10, padding: 10,
-    shadowColor: '#000', shadowOpacity: 0.15,
-    shadowRadius: 8, elevation: 5,
-    minWidth: 110, zIndex: 10,
-  },
-  tooltipTitle: { fontSize: 13, fontWeight: 'bold', color: '#000' },
-  tooltipValue: { fontSize: 13, color: '#3b82f6', fontWeight: '600', marginTop: 2 },
+  statBadgeText: { fontSize: theme.fonts.sizes.xs, fontWeight: '600', flexShrink: 1 },
+  chartCard: { backgroundColor: theme.colors.surface, borderRadius: theme.radius.lg, padding: theme.spacing.md, borderWidth: StyleSheet.hairlineWidth, borderColor: theme.colors.border },
+  chartHeader: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm, marginBottom: theme.spacing.lg },
+  chartTitles: { flex: 1, gap: theme.spacing.xs },
+  chartTitle: { fontSize: theme.fonts.sizes.lg, fontWeight: '700', color: theme.colors.textPrimary },
+  chartSubtitle: { fontSize: theme.fonts.sizes.sm, color: theme.colors.textSecondary },
+  chartIcon: { width: 36, height: 36, borderRadius: theme.radius.md, backgroundColor: theme.colors.infoSurface, alignItems: 'center', justifyContent: 'center' },
 });

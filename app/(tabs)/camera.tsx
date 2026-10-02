@@ -1,199 +1,89 @@
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
+import { theme } from '../../constants/theme';
+import ScreenHeader from '../../components/ScreenHeader';
 
 const features = [
   'Identificação automática de espécies',
   'Histórico de avistamentos',
   'Estatísticas de visitação',
   'Imagens dos avistamentos registrados',
-  'Relatórios em tempo real',
 ];
 
-function InfoCard({ emoji, title, subtitle, description, bg = 'white', dark = false }: {
-  emoji: string; title: string; subtitle: string;
-  description: string; bg?: string; dark?: boolean;
+function InfoCard({ icon, title, subtitle, description }: {
+  icon: keyof typeof Ionicons.glyphMap; title: string; subtitle: string; description: string;
 }) {
   return (
-    <View style={[styles.card, { backgroundColor: bg }]}>
+    <View style={styles.card}>
       <View style={styles.cardTitleRow}>
-        <Text style={styles.cardEmoji}>{emoji}</Text>
-        <Text style={[styles.cardTitle, { color: dark ? 'white' : '#000' }]}>{title}</Text>
+        <View style={styles.icon}><Ionicons name={icon} size={24} color={theme.colors.primary} /></View>
+        <Text accessibilityRole="header" style={styles.cardTitle}>{title}</Text>
       </View>
-      <Text style={[styles.cardSubtitle, { color: dark ? 'rgba(255,255,255,0.75)' : '#2563eb' }]}>
-        {subtitle}
-      </Text>
-      <Text style={[styles.cardDesc, { color: dark ? 'rgba(255,255,255,0.9)' : 'rgba(0,0,0,0.75)' }]}>
-        {description}
-      </Text>
+      <Text style={styles.cardSubtitle}>{subtitle}</Text>
+      <Text style={styles.cardDescription}>{description}</Text>
     </View>
   );
 }
 
-export default function CameraScreen() {
+export default function AboutScreen() {
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
-
-      {/* Hero Image */}
-      <View style={styles.heroContainer}>
-        <Image
-          source={{ uri: 'https://images.unsplash.com/photo-1448375240586-882707db888b?w=800' }}
-          style={styles.heroImage}
-          contentFit="cover"
-        />
-        <View style={styles.heroOverlay} />
-      </View>
-
-      {/* Hero Text */}
-      <View style={styles.heroText}>
-        <Text style={styles.heroTitle}>Sobre o Projeto</Text>
-        <Text style={styles.heroBlue}>Conectando natureza e tecnologia</Text>
-        <Text style={styles.heroDesc}>
-          O sistema utiliza Inteligência Artificial e Visão Computacional para identificar automaticamente espécies de aves em comedouros monitorados, promovendo observação ambiental de forma inteligente e acessível.
-        </Text>
-      </View>
-
-      <View style={styles.content}>
-
+    <View style={styles.container}>
+      <ScreenHeader title="Sobre o Projeto" subtitle="Conheça o AvistAI" />
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
+        <Image source={require('../../assets/loginImage.jpg')} style={styles.heroImage} contentFit="cover" />
+        <View style={styles.introduction}>
+          <Text style={styles.heroTitle}>Conectando natureza e tecnologia</Text>
+          <Text style={styles.cardDescription}>
+            O sistema utiliza Inteligência Artificial e Visão Computacional para identificar automaticamente espécies de aves em comedouros monitorados, promovendo observação ambiental de forma inteligente e acessível.
+          </Text>
+        </View>
         <InfoCard
-          emoji="🤖"
-          title="A Tecnologia"
-          subtitle="Visão Computacional aplicada às aves"
+          icon="hardware-chip-outline" title="A tecnologia" subtitle="Visão Computacional aplicada às aves"
           description="A câmera captura imagens automaticamente quando detecta movimento. As imagens são processadas por modelos de IA capazes de reconhecer espécies e registrar informações como horário, frequência e quantidade de visitas."
         />
-
         <InfoCard
-          emoji="🌎"
-          title="Nossa Missão"
-          subtitle="Tecnologia para preservação ambiental"
+          icon="earth-outline" title="Nossa missão" subtitle="Tecnologia para preservação ambiental"
           description="Nosso objetivo é aproximar as pessoas da biodiversidade local através da tecnologia, incentivando a observação de aves e a conscientização ambiental de forma acessível e educativa."
-          bg="#2563eb"
-          dark
         />
-
         <InfoCard
-          emoji="👨‍💻"
-          title="A Equipe"
-          subtitle="Pesquisa, tecnologia e inovação"
+          icon="people-outline" title="A equipe" subtitle="Pesquisa, tecnologia e inovação"
           description="O projeto reúne tecnologia, Inteligência Artificial e monitoramento ambiental para desenvolver soluções voltadas à observação e preservação da avifauna brasileira."
         />
-
-        {/* Funcionalidades */}
         <View style={styles.card}>
-          <View style={styles.cardTitleRow}>
-            <Text style={styles.cardEmoji}>📊</Text>
-            <Text style={styles.cardTitle}>Funcionalidades</Text>
-          </View>
-          <Text style={styles.cardSubtitle}>Monitoramento inteligente</Text>
-          <View style={styles.featureList}>
-            {features.map((item, i) => (
-              <View key={i} style={styles.featureRow}>
-                <Ionicons name="checkmark-circle-outline" size={20} color="#2563eb" />
-                <Text style={styles.featureText}>{item}</Text>
-              </View>
-            ))}
-          </View>
+          <Text accessibilityRole="header" style={styles.cardTitle}>O que você pode acompanhar</Text>
+          {features.map((feature) => (
+            <View key={feature} style={styles.featureRow}>
+              <Ionicons name="checkmark-circle-outline" size={22} color={theme.colors.primary} />
+              <Text style={styles.featureText}>{feature}</Text>
+            </View>
+          ))}
         </View>
-
         <InfoCard
-          emoji="📱"
-          title="Aplicativo Mobile"
-          subtitle="Informações em tempo real"
+          icon="phone-portrait-outline" title="Aplicativo mobile" subtitle="Seus registros em um só lugar"
           description="O aplicativo permite consultar imagens dos avistamentos, acessar registros das aves identificadas e visualizar estatísticas sobre a biodiversidade monitorada."
         />
-
         <InfoCard
-          emoji="🐦"
-          title="Espécies Monitoradas"
-          subtitle="Avifauna paulista"
+          icon="leaf-outline" title="Espécies monitoradas" subtitle="Avifauna paulista"
           description="O sistema foi projetado para reconhecer espécies comuns do Estado de São Paulo, como Bem-te-vi, Sabiá-laranjeira, Sanhaço-cinzento, Tico-tico e outras aves urbanas."
-          bg="#1e293b"
-          dark
         />
-
-      </View>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f3f4f6' },
-
-  heroContainer: { height: 240, position: 'relative' },
-  heroImage: { width: '100%', height: '100%' },
-  heroOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(243,244,246,0.75)',
-  },
-
-  heroText: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 8,
-    marginTop: -60,
-  },
-  heroTitle: {
-    fontSize: 30,
-    fontWeight: 'bold',
-    color: '#000',
-    marginBottom: 6,
-  },
-  heroBlue: {
-    fontSize: 15,
-    fontWeight: 'bold',
-    color: '#2563eb',
-    marginBottom: 12,
-  },
-  heroDesc: {
-    fontSize: 14,
-    color: 'rgba(0,0,0,0.75)',
-    lineHeight: 22,
-  },
-
-  content: { padding: 16, gap: 14 },
-
-  card: {
-    backgroundColor: 'white',
-    borderRadius: 20,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  cardTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 4,
-  },
-  cardEmoji: { fontSize: 22 },
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#000',
-  },
-  cardSubtitle: {
-    fontSize: 13,
-    fontWeight: 'bold',
-    color: '#2563eb',
-    marginBottom: 10,
-  },
-  cardDesc: {
-    fontSize: 14,
-    color: 'rgba(0,0,0,0.75)',
-    lineHeight: 22,
-  },
-
-  featureList: { gap: 12, marginTop: 4 },
-  featureRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  featureText: {
-    fontSize: 14,
-    color: 'rgba(0,0,0,0.75)',
-    fontWeight: '500',
-  },
+  container: { flex: 1, backgroundColor: theme.colors.background },
+  content: { padding: theme.spacing.md, paddingBottom: theme.spacing.lg, gap: theme.spacing.md },
+  heroImage: { width: '100%', aspectRatio: 16 / 9, borderRadius: theme.radius.lg },
+  introduction: { paddingVertical: theme.spacing.sm, gap: theme.spacing.sm },
+  heroTitle: { color: theme.colors.textPrimary, fontSize: theme.fonts.sizes.xl, fontWeight: '700' },
+  card: { backgroundColor: theme.colors.surface, borderRadius: theme.radius.lg, padding: theme.spacing.md, gap: theme.spacing.md, borderWidth: StyleSheet.hairlineWidth, borderColor: theme.colors.border },
+  cardTitleRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md },
+  icon: { width: 44, height: 44, borderRadius: theme.radius.md, backgroundColor: theme.colors.infoSurface, alignItems: 'center', justifyContent: 'center' },
+  cardTitle: { flex: 1, fontSize: theme.fonts.sizes.lg, fontWeight: '700', color: theme.colors.textPrimary },
+  cardSubtitle: { fontSize: theme.fonts.sizes.sm, color: theme.colors.primary, fontWeight: '600' },
+  cardDescription: { fontSize: theme.fonts.sizes.md, color: theme.colors.textSecondary, lineHeight: 24 },
+  featureRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm },
+  featureText: { flex: 1, fontSize: theme.fonts.sizes.md, color: theme.colors.textSecondary, lineHeight: 24 },
 });

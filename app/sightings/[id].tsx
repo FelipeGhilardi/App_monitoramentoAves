@@ -7,6 +7,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import SightingImageViewer from '../../components/SightingImageViewer';
+import ScreenHeader from '../../components/ScreenHeader';
+import { theme } from '../../constants/theme';
 import { isLoggedIn } from '../../services/auth';
 import {
   fetchSightingById, formatSightingDate, getSightingTitle, SightingResponse,
@@ -80,20 +82,15 @@ export default function SightingDetailScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Pressable onPress={goBack} accessibilityRole="button" accessibilityLabel="Voltar" style={styles.back}>
-          <Ionicons name="arrow-back" size={24} color="#111827" />
-        </Pressable>
-        <Text style={styles.headerTitle}>Avistamento</Text>
-      </View>
+      <ScreenHeader title="Avistamento" onBack={goBack} safeTop={false} />
 
       {status !== 'ready' || !sighting ? (
         <View style={styles.state}>
-          {status === 'loading' ? <ActivityIndicator color="#2563eb" size="large" /> : (
+          {status === 'loading' ? <ActivityIndicator color={theme.colors.primary} size="large" /> : (
             <Ionicons
               name={status === 'unauthorized' ? 'lock-closed-outline' : 'image-outline'}
               size={38}
-              color="#6b7280"
+              color={theme.colors.textSecondary}
             />
           )}
           <Text style={styles.stateText}>
@@ -125,7 +122,7 @@ export default function SightingDetailScreen() {
         <ScrollView contentContainerStyle={styles.content}>
           <Text style={styles.title}>{getSightingTitle(sighting)}</Text>
           <View style={styles.dateRow}>
-            <Ionicons name="calendar-outline" size={18} color="#6b7280" />
+            <Ionicons name="calendar-outline" size={18} color={theme.colors.textSecondary} />
             <Text style={styles.date}>{formatSightingDate(sighting)}</Text>
           </View>
 
@@ -147,12 +144,12 @@ export default function SightingDetailScreen() {
                 onLoad={() => setImageLoaded(true)}
                 onError={() => { setImageLoaded(false); setImageError(true); }}
               />
-              {!imageLoaded && <ActivityIndicator color="#2563eb" style={styles.photoLoading} />}
+              {!imageLoaded && <ActivityIndicator color={theme.colors.primary} style={styles.photoLoading} />}
               {imageLoaded && <Text style={styles.photoHint}>Toque para ampliar</Text>}
             </Pressable>
           ) : (
             <View style={styles.placeholder}>
-              <Ionicons name="image-outline" size={36} color="#9ca3af" />
+              <Ionicons name="image-outline" size={36} color={theme.colors.textSecondary} />
               <Text style={styles.placeholderText}>
                 {imageError ? 'Não foi possível carregar a imagem do registro.' : 'Sem imagem do registro'}
               </Text>
@@ -184,40 +181,34 @@ export default function SightingDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f3f4f6' },
-  header: {
-    backgroundColor: 'white', flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 16, paddingVertical: 10, gap: 12,
-  },
-  back: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
-  headerTitle: { fontSize: 20, fontWeight: 'bold', color: '#111827' },
+  container: { flex: 1, backgroundColor: theme.colors.background },
   state: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 16 },
-  stateText: { fontSize: 15, textAlign: 'center', color: '#374151' },
-  action: { backgroundColor: '#2563eb', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10 },
-  actionText: { color: 'white', fontWeight: 'bold' },
-  content: { padding: 20, paddingBottom: 48 },
-  title: { fontSize: 25, fontWeight: 'bold', color: '#111827' },
+  stateText: { fontSize: theme.fonts.sizes.md, lineHeight: 24, textAlign: 'center', color: theme.colors.textSecondary },
+  action: { minHeight: theme.touchTarget, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.primary, borderRadius: theme.radius.md, paddingHorizontal: theme.spacing.md, paddingVertical: theme.spacing.sm },
+  actionText: { color: theme.colors.textLight, fontSize: theme.fonts.sizes.md, fontWeight: '600' },
+  content: { padding: theme.spacing.md, paddingBottom: theme.spacing.lg },
+  title: { fontSize: theme.fonts.sizes.xl, fontWeight: '700', color: theme.colors.textPrimary },
   dateRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10, marginBottom: 20 },
-  date: { color: '#6b7280', fontSize: 14 },
+  date: { flexShrink: 1, color: theme.colors.textSecondary, fontSize: theme.fonts.sizes.sm, lineHeight: 21 },
   photoFrame: {
-    height: 320, backgroundColor: '#111827', borderRadius: 16, overflow: 'hidden',
+    width: '100%', aspectRatio: 4 / 3, backgroundColor: theme.colors.textPrimary, borderRadius: theme.radius.lg, overflow: 'hidden',
     alignItems: 'center', justifyContent: 'center',
   },
   photo: { width: '100%', height: '100%' },
   photoLoading: { position: 'absolute' },
   photoHint: {
-    position: 'absolute', bottom: 12, color: 'white', backgroundColor: 'rgba(0,0,0,0.6)',
+    position: 'absolute', bottom: 12, color: theme.colors.textLight, backgroundColor: 'rgba(0,0,0,0.6)', fontSize: theme.fonts.sizes.sm,
     paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12,
   },
   placeholder: {
-    height: 220, backgroundColor: 'white', borderRadius: 16,
+    minHeight: 220, backgroundColor: theme.colors.surface, borderRadius: theme.radius.lg,
     alignItems: 'center', justifyContent: 'center', gap: 12, padding: 20,
   },
-  placeholderText: { color: '#6b7280', textAlign: 'center', fontSize: 14 },
-  sectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#111827', marginTop: 24, marginBottom: 12 },
+  placeholderText: { color: theme.colors.textSecondary, textAlign: 'center', fontSize: theme.fonts.sizes.md, lineHeight: 24 },
+  sectionTitle: { fontSize: theme.fonts.sizes.lg, fontWeight: '700', color: theme.colors.textPrimary, marginTop: theme.spacing.lg, marginBottom: 12 },
   speciesRow: {
-    backgroundColor: 'white', borderRadius: 12, padding: 16, marginBottom: 10, gap: 4,
+    backgroundColor: theme.colors.surface, borderRadius: theme.radius.md, padding: theme.spacing.md, marginBottom: theme.spacing.sm, gap: theme.spacing.xs,
   },
-  speciesName: { fontSize: 16, fontWeight: '600', color: '#111827' },
-  scientificName: { fontSize: 13, color: '#6b7280', fontStyle: 'italic' },
+  speciesName: { fontSize: theme.fonts.sizes.md, fontWeight: '600', color: theme.colors.textPrimary },
+  scientificName: { fontSize: theme.fonts.sizes.sm, color: theme.colors.textSecondary, fontStyle: 'italic' },
 });

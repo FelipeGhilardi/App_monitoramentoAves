@@ -1,280 +1,56 @@
 import { useCallback, useEffect, useState } from 'react';
-import {
-  View, Text, StyleSheet, ScrollView, FlatList,
-  TouchableOpacity, Modal, TextInput, SafeAreaView,
-  ActivityIndicator,
-} from 'react-native';
+import { View, Text, StyleSheet, ScrollView, FlatList, Pressable, Modal } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
-import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { getCurrentUser, logout, updateProfile, UserResponse } from '../../services/auth';
-import {
-  fetchSightings,
-  formatSightingDate,
-  getSightingTitle,
-  SightingResponse,
-} from '../../services/sightings';
-import AppAlert, { AppAlertVariant } from '../../components/AppAlert';
-
-function getSightingThumbnail(sighting: SightingResponse): string | null {
-  if (sighting.imageUrl) return sighting.imageUrl;
-  const speciesImage = sighting.species.find((s) => s.imageUrl)?.imageUrl;
-  return speciesImage ?? null;
-}
+import { getCurrentUser, logout, UserResponse } from '../../services/auth';
+import { fetchSightings, SightingResponse } from '../../services/sightings';
+import { theme } from '../../constants/theme';
+import { EditProfileModal, ProfileModal } from '../../components/AccountModals';
+import AppAlert from '../../components/AppAlert';
+import IconButton from '../../components/IconButton';
+import ScreenHeader from '../../components/ScreenHeader';
+import ScreenState from '../../components/ScreenState';
+import SettingsModal from '../../components/SettingsModal';
+import SightingCard from '../../components/SightingCard';
 
 function NotificationsModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <SafeAreaView style={modal.container}>
-        <View style={modal.header}>
-          <TouchableOpacity onPress={onClose} style={modal.backBtn}>
-            <Ionicons name="arrow-back" size={24} color="#000" />
-          </TouchableOpacity>
-          <Text style={modal.title}>Notificações</Text>
-        </View>
-        <View style={modal.content}>
-          <View style={[modal.notifCard, { borderLeftWidth: 4, borderLeftColor: '#3b82f6' }]}>
-            <Text style={modal.notifTitle}>Novo visitante!</Text>
-            <Text style={modal.notifBody}>Um Cardeal-vermelho foi visto no seu comedouro há 5 minutos.</Text>
+      <SafeAreaView edges={['bottom']} style={styles.container}>
+        <ScreenHeader title="Notificações" onBack={onClose} />
+        <ScrollView contentContainerStyle={styles.section}>
+          <View style={styles.notification}>
+            <Text style={styles.cardTitle}>Novo visitante!</Text>
+            <Text style={styles.bodyText}>Um Cardeal-vermelho foi visto no seu comedouro há 5 minutos.</Text>
           </View>
-          <View style={[modal.notifCard, { borderWidth: 1, borderColor: '#e5e7eb' }]}>
-            <Text style={modal.notifTitle}>Bateria baixa</Text>
-            <Text style={modal.notifBody}>A câmera do comedouro principal está com 15% de bateria.</Text>
+          <View style={styles.notification}>
+            <Text style={styles.cardTitle}>Bateria baixa</Text>
+            <Text style={styles.bodyText}>A câmera do comedouro principal está com 15% de bateria.</Text>
           </View>
-        </View>
+        </ScrollView>
       </SafeAreaView>
     </Modal>
   );
 }
 
-function ProfileModal({
-  visible,
-  onClose,
-  onEdit,
-  onLogout,
-  user,
-}: {
-  visible: boolean;
-  onClose: () => void;
-  onEdit: () => void;
-  onLogout: () => void;
-  user: UserResponse | null;
+function AllSightingsModal({ visible, onClose, sightings, onSelect }: {
+  visible: boolean; onClose: () => void; sightings: SightingResponse[]; onSelect: (id: string) => void;
 }) {
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <SafeAreaView style={modal.container}>
-        <View style={modal.header}>
-          <TouchableOpacity onPress={onClose} style={modal.backBtn}>
-            <Ionicons name="arrow-back" size={24} color="#000" />
-          </TouchableOpacity>
-          <Text style={modal.title}>Perfil</Text>
-        </View>
-        <View style={modal.content}>
-          <View style={modal.profileCenter}>
-            <Text style={modal.profileName}>{user?.name ?? 'Usuário'}</Text>
-            <Text style={modal.profileEmail}>{user?.email ?? ''}</Text>
-          </View>
-          <TouchableOpacity style={modal.profileBtn} onPress={onEdit}>
-            <Text style={modal.profileBtnText}>Editar Perfil</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={modal.profileBtnDanger} onPress={onLogout}>
-            <Text style={modal.profileBtnDangerText}>Sair da Conta</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    </Modal>
-  );
-}
-
-function EditProfileModal({
-  visible,
-  onClose,
-  user,
-  onSaved,
-}: {
-  visible: boolean;
-  onClose: () => void;
-  user: UserResponse | null;
-  onSaved: (updated: UserResponse) => void;
-}) {
-  const [name, setName] = useState(user?.name ?? '');
-  const [email, setEmail] = useState(user?.email ?? '');
-  const [saving, setSaving] = useState(false);
-  const [alert, setAlert] = useState<{
-    visible: boolean;
-    variant: AppAlertVariant;
-    title: string;
-    message?: string;
-    onCloseAction?: () => void;
-  }>({ visible: false, variant: 'error', title: '' });
-
-  useEffect(() => {
-    if (visible) {
-      setName(user?.name ?? '');
-      setEmail(user?.email ?? '');
-    }
-  }, [visible, user]);
-
-  const showAlert = (
-    variant: AppAlertVariant,
-    title: string,
-    message?: string,
-    onCloseAction?: () => void
-  ) => setAlert({ visible: true, variant, title, message, onCloseAction });
-
-  const closeAlert = () => {
-    const action = alert.onCloseAction;
-    setAlert((prev) => ({ ...prev, visible: false, onCloseAction: undefined }));
-    action?.();
-  };
-
-  const handleSave = async () => {
-    const trimmedName = name.trim();
-    const trimmedEmail = email.trim();
-
-    if (!trimmedName || !trimmedEmail) {
-      showAlert('error', 'Atenção', 'Preencha nome e e-mail.');
-      return;
-    }
-
-    setSaving(true);
-    const result = await updateProfile(trimmedName, trimmedEmail);
-    setSaving(false);
-
-    if (result.success && result.user) {
-      onSaved(result.user);
-      showAlert('success', 'Perfil atualizado', 'Suas informações foram salvas.', onClose);
-    } else {
-      showAlert('error', 'Não foi possível salvar', result.message ?? 'Tente novamente.');
-    }
-  };
-
-  return (
-    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <SafeAreaView style={modal.container}>
-        <View style={modal.header}>
-          <TouchableOpacity onPress={onClose} style={modal.backBtn}>
-            <Ionicons name="arrow-back" size={24} color="#000" />
-          </TouchableOpacity>
-          <Text style={modal.title}>Editar Perfil</Text>
-        </View>
-        <View style={modal.content}>
-          <Text style={modal.inputLabel}>Nome</Text>
-          <TextInput
-            style={modal.input}
-            value={name}
-            onChangeText={setName}
-            placeholder="Seu nome"
-            placeholderTextColor="rgba(0,0,0,0.4)"
-          />
-          <Text style={modal.inputLabel}>E-mail</Text>
-          <TextInput
-            style={modal.input}
-            value={email}
-            onChangeText={setEmail}
-            placeholder="seu@email.com"
-            placeholderTextColor="rgba(0,0,0,0.4)"
-            keyboardType="email-address"
-            autoCapitalize="none"
-          />
-          <TouchableOpacity
-            style={[modal.saveBtn, saving && { opacity: 0.7 }]}
-            onPress={handleSave}
-            disabled={saving}
-          >
-            <Text style={modal.saveBtnText}>
-              {saving ? 'Salvando...' : 'Salvar Alterações'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        <AppAlert
-          visible={alert.visible}
-          variant={alert.variant}
-          title={alert.title}
-          message={alert.message}
-          onClose={closeAlert}
+      <SafeAreaView edges={['bottom']} style={styles.container}>
+        <ScreenHeader title="Todos os avistamentos" onBack={onClose} />
+        <FlatList
+          data={sightings}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.section}
+          renderItem={({ item }) => <SightingCard sighting={item} onPress={() => onSelect(item.id)} />}
+          ListEmptyComponent={<ScreenState title="Nenhum avistamento ainda" message="Quando houver registros, eles aparecerão aqui." />}
+          showsVerticalScrollIndicator={false}
         />
       </SafeAreaView>
     </Modal>
-  );
-}
-
-function AllSightingsModal({
-  visible,
-  onClose,
-  sightings,
-  onSelect,
-}: {
-  visible: boolean;
-  onClose: () => void;
-  sightings: SightingResponse[];
-  onSelect: (id: string) => void;
-}) {
-  return (
-    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <SafeAreaView style={modal.container}>
-        <View style={modal.header}>
-          <TouchableOpacity onPress={onClose} style={modal.backBtn}>
-            <Ionicons name="arrow-back" size={24} color="#000" />
-          </TouchableOpacity>
-          <Text style={modal.title}>Todos os avistamentos</Text>
-        </View>
-        {sightings.length === 0 ? (
-          <View style={modal.emptyWrap}>
-            <Ionicons name="leaf-outline" size={42} color="rgba(0,0,0,0.3)" />
-            <Text style={modal.emptyTitle}>Nenhum avistamento ainda</Text>
-            <Text style={modal.emptyText}>
-              Quando houver registros, eles aparecerão aqui.
-            </Text>
-          </View>
-        ) : (
-          <FlatList
-            data={sightings}
-            keyExtractor={(item) => String(item.id)}
-            contentContainerStyle={modal.listContent}
-            renderItem={({ item }) => <SightingCard sighting={item} onPress={() => onSelect(item.id)} />}
-            showsVerticalScrollIndicator={false}
-          />
-        )}
-      </SafeAreaView>
-    </Modal>
-  );
-}
-
-function SightingCard({ sighting, onPress }: { sighting: SightingResponse; onPress: () => void }) {
-  const thumbnail = getSightingThumbnail(sighting);
-  const title = getSightingTitle(sighting);
-  const date = formatSightingDate(sighting);
-
-  return (
-    <TouchableOpacity
-      style={styles.sightingCard}
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={`Ver avistamento: ${title}`}
-    >
-      <View style={styles.sightingThumb}>
-        {thumbnail ? (
-          <Image
-            source={{ uri: thumbnail }}
-            style={StyleSheet.absoluteFillObject}
-            contentFit="cover"
-          />
-        ) : (
-          <View style={[StyleSheet.absoluteFillObject, styles.thumbPlaceholder]}>
-            <Ionicons name="image-outline" size={28} color="rgba(0,0,0,0.3)" />
-          </View>
-        )}
-      </View>
-      <View style={styles.sightingInfo}>
-        <Text style={styles.sightingTitle} numberOfLines={2}>{title}</Text>
-        <View style={styles.metaRow}>
-          <Ionicons name="calendar-outline" size={13} color="rgba(0,0,0,0.5)" />
-          <Text style={styles.metaText}>{date}</Text>
-        </View>
-      </View>
-    </TouchableOpacity>
   );
 }
 
@@ -283,15 +59,24 @@ export default function HomeScreen() {
   const [showNotif, setShowNotif] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [showAllSightings, setShowAllSightings] = useState(false);
   const [sightings, setSightings] = useState<SightingResponse[]>([]);
   const [loadingSightings, setLoadingSightings] = useState(true);
   const [sightingsError, setSightingsError] = useState<string | null>(null);
   const [user, setUser] = useState<UserResponse | null>(null);
+  const [accountError, setAccountError] = useState('');
+  const [loggingOut, setLoggingOut] = useState(false);
 
   const loadUser = useCallback(async () => {
-    const current = await getCurrentUser();
-    setUser(current);
+    try {
+      const current = await getCurrentUser();
+      setUser(current);
+      return true;
+    } catch {
+      setAccountError('Não foi possível carregar seus dados. Tente novamente.');
+      return false;
+    }
   }, []);
 
   const loadSightings = useCallback(async () => {
@@ -308,23 +93,35 @@ export default function HomeScreen() {
   }, []);
 
   useEffect(() => {
-    loadUser();
-    loadSightings();
+    void loadUser();
+    void loadSightings();
   }, [loadUser, loadSightings]);
 
   const openProfile = async () => {
-    await loadUser();
-    setShowProfile(true);
+    if (await loadUser()) setShowProfile(true);
+  };
+
+  const openSettings = async () => {
+    if (await loadUser()) setShowSettings(true);
   };
 
   const handleLogout = async () => {
-    await logout();
+    if (loggingOut) return;
+    setLoggingOut(true);
+    try {
+      await logout();
+    } catch {
+      setAccountError('Não foi possível sair da conta. Tente novamente.');
+      return;
+    } finally {
+      setLoggingOut(false);
+    }
     setShowProfile(false);
+    setShowSettings(false);
     setUser(null);
     router.replace('/login');
   };
 
-  const latestSightings = sightings.slice(0, 5);
   const openSighting = (id: string) => {
     setShowAllSightings(false);
     router.push({ pathname: '/sightings/[id]', params: { id } });
@@ -332,226 +129,73 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.container}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
-
-        {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.headerIcons}>
-            <TouchableOpacity style={styles.iconBtn} onPress={() => setShowNotif(true)}>
-              <Ionicons name="notifications-outline" size={24} color="#000" />
-              <View style={styles.notifDot}>
-                <Text style={styles.notifDotText}>1</Text>
-              </View>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={openProfile}>
-              <Ionicons name="person-outline" size={24} color="#000" />
-            </TouchableOpacity>
-            <TouchableOpacity>
-              <Ionicons name="settings-outline" size={24} color="#000" />
-            </TouchableOpacity>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+        <ScreenHeader
+          title="AvistAI"
+          actions={<>
+            <View>
+              <IconButton icon="notifications-outline" label="Notificações" onPress={() => setShowNotif(true)} />
+              <View pointerEvents="none" style={styles.notifDot}><Text style={styles.notifDotText}>1</Text></View>
+            </View>
+            <IconButton icon="person-outline" label="Abrir perfil" onPress={openProfile} />
+            <IconButton icon="settings-outline" label="Abrir configurações" onPress={openSettings} />
+          </>}
+        />
+        <View style={styles.welcome}>
+          <Image source={require('../../assets/menuImage.jpg')} style={styles.welcomeImage} contentFit="cover" />
+          <View style={styles.welcomeText}>
+            <Text style={styles.welcomeTitle}>Natureza mais perto</Text>
+            <Text style={styles.bodyText}>Acompanhe os pássaros do seu comedouro.</Text>
           </View>
         </View>
-
-        {/* Hero */}
-        <View style={styles.hero}>
-          <Image
-            source={require('../../assets/menuImage.jpg')}
-            style={styles.heroImage}
-            contentFit="cover"
-          />
-          <Text style={styles.heroTitle}>Monitoramento{'\n'}Inteligente</Text>
-          <Text style={styles.heroSubtitle}>
-            Acompanhe os pássaros do seu comedouro a qualquer momento.
-          </Text>
-
-        </View>
-
-        <View style={styles.divider} />
-
-        {/* Últimos avistamentos */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <View>
-              <Text style={styles.sectionTitle}>Últimos avistamentos</Text>
-            </View>
+            <Text accessibilityRole="header" style={styles.sectionTitle}>Últimos avistamentos</Text>
             {sightings.length > 0 && (
-              <TouchableOpacity onPress={() => setShowAllSightings(true)}>
+              <Pressable accessibilityRole="button" style={styles.seeAllButton} onPress={() => setShowAllSightings(true)}>
                 <Text style={styles.seeAll}>Ver tudo</Text>
-              </TouchableOpacity>
+              </Pressable>
             )}
           </View>
-
-          {loadingSightings ? (
-            <View style={styles.statusBox}>
-              <ActivityIndicator color="#2563eb" />
-              <Text style={styles.statusText}>Carregando avistamentos...</Text>
-            </View>
-          ) : sightingsError ? (
-            <View style={styles.statusBox}>
-              <Ionicons name="cloud-offline-outline" size={28} color="rgba(0,0,0,0.4)" />
-              <Text style={styles.statusText}>{sightingsError}</Text>
-              <TouchableOpacity style={styles.retryBtn} onPress={loadSightings}>
-                <Text style={styles.retryBtnText}>Tentar novamente</Text>
-              </TouchableOpacity>
-            </View>
-          ) : latestSightings.length === 0 ? (
-            <View style={styles.emptyBox}>
-              <Ionicons name="leaf-outline" size={36} color="rgba(0,0,0,0.3)" />
-              <Text style={styles.emptyTitle}>Nenhum avistamento ainda</Text>
-              <Text style={styles.emptyText}>
-                Assim que novos avistamentos forem registrados, eles aparecerão aqui.
-              </Text>
-            </View>
-          ) : (
-            latestSightings.map((sighting) => (
-              <SightingCard key={sighting.id} sighting={sighting} onPress={() => openSighting(sighting.id)} />
-            ))
-          )}
+          {loadingSightings ? <ScreenState loading title="Carregando avistamentos..." /> : sightingsError ? (
+            <ScreenState title="Não foi possível carregar" message={sightingsError} icon="cloud-offline-outline" actionLabel="Tentar novamente" onAction={loadSightings} />
+          ) : sightings.length === 0 ? (
+            <ScreenState title="Nenhum avistamento ainda" message="Assim que novos avistamentos forem registrados, eles aparecerão aqui." />
+          ) : sightings.slice(0, 5).map((sighting) => (
+            <SightingCard key={sighting.id} sighting={sighting} onPress={() => openSighting(sighting.id)} />
+          ))}
         </View>
       </ScrollView>
-
       <NotificationsModal visible={showNotif} onClose={() => setShowNotif(false)} />
-      <ProfileModal
-        visible={showProfile}
-        onClose={() => setShowProfile(false)}
-        onEdit={() => { setShowProfile(false); setShowEditProfile(true); }}
-        onLogout={handleLogout}
-        user={user}
+      <ProfileModal visible={showProfile} onClose={() => setShowProfile(false)} onEdit={() => { setShowProfile(false); setShowEditProfile(true); }} onLogout={handleLogout} user={user} loggingOut={loggingOut} />
+      <EditProfileModal visible={showEditProfile} onClose={() => setShowEditProfile(false)} user={user} onSaved={setUser} />
+      <SettingsModal
+        visible={showSettings} user={user} onClose={() => setShowSettings(false)}
+        onEdit={() => { setShowSettings(false); setShowEditProfile(true); }}
+        onAbout={() => { setShowSettings(false); router.navigate('/(tabs)/camera'); }}
+        onLogout={handleLogout} loggingOut={loggingOut}
       />
-      <EditProfileModal
-        visible={showEditProfile}
-        onClose={() => setShowEditProfile(false)}
-        user={user}
-        onSaved={(updated) => setUser(updated)}
-      />
-      <AllSightingsModal
-        visible={showAllSightings}
-        onClose={() => setShowAllSightings(false)}
-        sightings={sightings}
-        onSelect={openSighting}
-      />
+      <AllSightingsModal visible={showAllSightings} onClose={() => setShowAllSightings(false)} sightings={sightings} onSelect={openSighting} />
+      <AppAlert visible={Boolean(accountError)} title="Erro na conta" message={accountError} onClose={() => setAccountError('')} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f3f4f6' },
-
-  header: {
-    flexDirection: 'row', justifyContent: 'flex-end',
-    alignItems: 'center', paddingTop: 56,
-    paddingHorizontal: 20, paddingBottom: 12,
-  },
-  viewBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    borderWidth: 1, borderColor: '#000',
-    borderRadius: 20, paddingHorizontal: 14, paddingVertical: 6,
-  },
-  viewBtnText: { fontSize: 13, fontWeight: '600', color: '#000' },
-  headerIcons: { flexDirection: 'row', alignItems: 'center', gap: 16 },
-  iconBtn: { position: 'relative' },
-  notifDot: {
-    position: 'absolute', top: -4, right: -4,
-    width: 16, height: 16, borderRadius: 8,
-    backgroundColor: '#dc2626', alignItems: 'center', justifyContent: 'center',
-  },
-  notifDotText: { color: 'white', fontSize: 9, fontWeight: 'bold' },
-
-  hero: { paddingHorizontal: 20, alignItems: 'center', paddingBottom: 24 },
-  heroImage: { width: 96, height: 96, borderRadius: 20, marginBottom: 16, borderWidth: 2, borderColor: 'white' },
-  heroTitle: { fontSize: 34, fontWeight: 'bold', color: '#000', textAlign: 'center', lineHeight: 40, marginBottom: 10 },
-  heroSubtitle: { fontSize: 14, color: 'rgba(0,0,0,0.6)', textAlign: 'center', lineHeight: 20, marginBottom: 24 },
-
-  divider: { height: 4, backgroundColor: '#e5e7eb', marginVertical: 20 },
-
-  section: { paddingHorizontal: 20 },
-  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 16 },
-  sectionTitle: { fontSize: 19, fontWeight: 'bold', color: '#000' },
-  sectionSub: { fontSize: 13, color: 'rgba(0,0,0,0.5)', marginTop: 2 },
-  seeAll: { fontSize: 13, fontWeight: 'bold', color: '#000' },
-
-  sightingCard: {
-    backgroundColor: 'white', borderRadius: 16,
-    flexDirection: 'row', marginBottom: 12,
-    overflow: 'hidden', padding: 10, gap: 12,
-    shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 2,
-  },
-  sightingThumb: { width: 120, height: 80, borderRadius: 10, overflow: 'hidden', backgroundColor: '#f3f4f6' },
-  thumbPlaceholder: {
-    alignItems: 'center', justifyContent: 'center', backgroundColor: '#f3f4f6',
-  },
-  sightingInfo: { flex: 1, justifyContent: 'center', gap: 4 },
-  sightingTitle: { fontSize: 13, fontWeight: 'bold', color: '#000' },
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  metaText: { fontSize: 11, color: 'rgba(0,0,0,0.5)' },
-
-  statusBox: {
-    backgroundColor: 'white', borderRadius: 16, padding: 20,
-    alignItems: 'center', justifyContent: 'center', gap: 10,
-    shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 2,
-  },
-  statusText: { fontSize: 13, color: 'rgba(0,0,0,0.6)', textAlign: 'center' },
-  retryBtn: {
-    backgroundColor: '#2563eb', paddingHorizontal: 16, paddingVertical: 8,
-    borderRadius: 20, marginTop: 4,
-  },
-  retryBtnText: { color: 'white', fontWeight: 'bold', fontSize: 13 },
-
-  emptyBox: {
-    backgroundColor: 'white', borderRadius: 16, padding: 24,
-    alignItems: 'center', justifyContent: 'center', gap: 8,
-    borderWidth: 1, borderColor: '#f3f4f6',
-  },
-  emptyTitle: { fontSize: 15, fontWeight: 'bold', color: '#000', marginTop: 4 },
-  emptyText: { fontSize: 12, color: 'rgba(0,0,0,0.5)', textAlign: 'center', lineHeight: 18 },
-
-  fab: {
-    position: 'absolute', bottom: 90, right: 20,
-    width: 52, height: 52, borderRadius: 26,
-    backgroundColor: '#2563eb',
-    alignItems: 'center', justifyContent: 'center',
-    shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 8, elevation: 8,
-  },
-});
-
-const modal = StyleSheet.create({
-  container: { flex: 1, backgroundColor: 'white' },
-  header: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    padding: 16, borderBottomWidth: 1, borderBottomColor: '#f3f4f6',
-  },
-  backBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-  title: { fontSize: 19, fontWeight: 'bold', color: '#000' },
-  content: { padding: 16, gap: 12 },
-  notifCard: { backgroundColor: '#f3f4f6', borderRadius: 12, padding: 14 },
-  notifTitle: { fontWeight: 'bold', fontSize: 13, color: '#000', marginBottom: 4 },
-  notifBody: { fontSize: 12, color: 'rgba(0,0,0,0.6)', lineHeight: 18 },
-  profileCenter: { alignItems: 'center', paddingVertical: 24 },
-  profileName: { fontSize: 24, fontWeight: 'bold', color: '#000' },
-  profileEmail: { fontSize: 14, color: 'rgba(0,0,0,0.6)', marginTop: 6 },
-  profileBtn: { backgroundColor: '#f3f4f6', borderRadius: 12, padding: 16, alignItems: 'center' },
-  profileBtnText: { fontSize: 15, fontWeight: 'bold', color: '#000' },
-  profileBtnDanger: { backgroundColor: '#fef2f2', borderRadius: 12, padding: 16, alignItems: 'center' },
-  profileBtnDangerText: { fontSize: 15, fontWeight: 'bold', color: '#dc2626' },
-  inputLabel: { fontSize: 14, fontWeight: 'bold', color: '#000', marginBottom: 6 },
-  input: { backgroundColor: '#f3f4f6', borderRadius: 12, padding: 14, fontSize: 15, color: '#000', marginBottom: 14 },
-  saveBtn: { backgroundColor: '#3b82f6', borderRadius: 12, padding: 16, alignItems: 'center' },
-  saveBtnText: { color: 'white', fontSize: 15, fontWeight: 'bold' },
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', padding: 20 },
-  uploadCard: { backgroundColor: 'white', borderRadius: 24, padding: 20, width: '100%', gap: 12 },
-  uploadHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  uploadArea: {
-    height: 120, backgroundColor: '#f3f4f6', borderRadius: 12,
-    borderWidth: 2, borderStyle: 'dashed', borderColor: '#e5e7eb',
-    alignItems: 'center', justifyContent: 'center', gap: 8,
-  },
-  uploadAreaText: { fontSize: 13, color: 'rgba(0,0,0,0.4)' },
-
-  listContent: { padding: 16, gap: 12 },
-  emptyWrap: {
-    flex: 1, alignItems: 'center', justifyContent: 'center',
-    paddingHorizontal: 32, gap: 10,
-  },
-  emptyTitle: { fontSize: 17, fontWeight: 'bold', color: '#000', marginTop: 6 },
-  emptyText: { fontSize: 13, color: 'rgba(0,0,0,0.5)', textAlign: 'center', lineHeight: 19 },
+  container: { flex: 1, backgroundColor: theme.colors.background },
+  scrollContent: { paddingBottom: theme.spacing.lg },
+  welcome: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md, padding: theme.spacing.md, paddingTop: theme.spacing.lg },
+  welcomeImage: { width: 64, height: 64, borderRadius: theme.radius.lg },
+  welcomeText: { flex: 1, gap: theme.spacing.xs },
+  welcomeTitle: { fontSize: theme.fonts.sizes.lg, fontWeight: '700', color: theme.colors.textPrimary },
+  bodyText: { fontSize: theme.fonts.sizes.sm, lineHeight: 22, color: theme.colors.textSecondary },
+  section: { padding: theme.spacing.md, gap: theme.spacing.md },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm },
+  sectionTitle: { flex: 1, color: theme.colors.textPrimary, fontSize: theme.fonts.sizes.lg, fontWeight: '700' },
+  seeAllButton: { minHeight: theme.touchTarget, minWidth: theme.touchTarget, justifyContent: 'center', paddingHorizontal: theme.spacing.sm },
+  seeAll: { color: theme.colors.primary, fontSize: theme.fonts.sizes.sm, fontWeight: '600' },
+  notification: { padding: theme.spacing.md, gap: theme.spacing.sm, backgroundColor: theme.colors.surface, borderRadius: theme.radius.lg },
+  cardTitle: { fontSize: theme.fonts.sizes.md, fontWeight: '600', color: theme.colors.textPrimary },
+  notifDot: { position: 'absolute', top: 2, right: 4, minWidth: 18, minHeight: 18, paddingHorizontal: 4, backgroundColor: theme.colors.danger, borderRadius: theme.radius.full, alignItems: 'center', justifyContent: 'center' },
+  notifDotText: { color: theme.colors.textLight, fontSize: 10, fontWeight: '700' },
 });

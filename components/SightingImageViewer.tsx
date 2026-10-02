@@ -10,6 +10,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { clampOffset, clampZoom, MAX_ZOOM, MIN_ZOOM } from '../utils/imageZoom';
+import { theme } from '../constants/theme';
 
 interface Props {
   uri: string;
@@ -192,7 +193,7 @@ const styles = StyleSheet.create({
   imageFrame: { width: '100%', height: '100%' },
   image: { width: '100%', height: '100%' },
   close: {
-    position: 'absolute', right: 16, width: 44, height: 44, borderRadius: 22,
+    position: 'absolute', right: theme.spacing.md, width: theme.touchTarget, height: theme.touchTarget, borderRadius: theme.radius.full,
     backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center',
   },
   controls: {
@@ -201,14 +202,14 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.7)',
   },
   control: {
-    width: 44, height: 44, borderRadius: 22,
-    alignItems: 'center', justifyContent: 'center', backgroundColor: '#374151',
+    width: theme.touchTarget, height: theme.touchTarget, borderRadius: theme.radius.full,
+    alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.textSecondary,
   },
   disabled: { opacity: 0.4 },
   zoomText: { fontSize: 16, color: 'white', minWidth: 40, textAlign: 'center' },
   message: { alignItems: 'center', gap: 16, paddingHorizontal: 24 },
-  messageText: { color: 'white', fontSize: 15, textAlign: 'center' },
-  retry: { backgroundColor: '#2563eb', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10 },
-  retryText: { color: 'white', fontWeight: 'bold' },
+  messageText: { color: theme.colors.textLight, fontSize: theme.fonts.sizes.md, textAlign: 'center' },
+  retry: { minHeight: theme.touchTarget, justifyContent: 'center', backgroundColor: theme.colors.primary, borderRadius: theme.radius.md, paddingHorizontal: theme.spacing.md, paddingVertical: theme.spacing.sm },
+  retryText: { color: theme.colors.textLight, fontSize: theme.fonts.sizes.md, fontWeight: '600' },
   loading: { position: 'absolute' },
 });

@@ -1,60 +1,67 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, FlatList,
-  TouchableOpacity, TextInput, ActivityIndicator,
+  Pressable, TextInput,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { fetchSpecies, SpeciesResponse } from '../../services/species';
+import { theme } from '../../constants/theme';
+import ScreenHeader from '../../components/ScreenHeader';
+import ScreenState from '../../components/ScreenState';
+import IconButton from '../../components/IconButton';
 
 function SpeciesCard({ species }: { species: SpeciesResponse }) {
+  const [expanded, setExpanded] = useState(false);
+  const hasDetails = Boolean(species.description || species.tips);
   return (
     <View style={styles.card}>
-      <View style={styles.imageContainer}>
-        {species.imageUrl ? (
-          <Image
-            source={{ uri: species.imageUrl }}
-            style={styles.image}
-            contentFit="cover"
-          />
-        ) : (
-          <View style={[styles.image, styles.imagePlaceholder]}>
-            <Ionicons name="image-outline" size={40} color="rgba(0,0,0,0.25)" />
-          </View>
-        )}
-      </View>
-
-      <View style={styles.cardBody}>
-        <Text style={styles.species}>{species.name}</Text>
-        <Text style={styles.scientificName}>{species.scientificName}</Text>
-
-        {species.description ? (
-          <View style={styles.descriptionBox}>
-            <Ionicons
-              name="information-circle-outline"
-              size={16}
-              color="#3b82f6"
-              style={{ marginTop: 1 }}
-            />
-            <Text style={styles.descriptionText}>{species.description}</Text>
-          </View>
-        ) : null}
-
-        {species.tips ? (
-          <View style={styles.tipsBox}>
-            <Ionicons
-              name="bulb-outline"
-              size={16}
-              color="#16a34a"
-              style={{ marginTop: 1 }}
-            />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.tipsLabel}>Dicas</Text>
-              <Text style={styles.tipsText}>{species.tips}</Text>
+      <View style={styles.summary}>
+        <View style={styles.imageContainer}>
+          {species.imageUrl ? (
+            <Image source={{ uri: species.imageUrl }} style={styles.image} contentFit="cover" />
+          ) : (
+            <View style={[styles.image, styles.imagePlaceholder]}>
+              <Ionicons name="image-outline" size={32} color={theme.colors.textSecondary} />
             </View>
-          </View>
-        ) : null}
+          )}
+        </View>
+        <View style={styles.cardBody}>
+          <Text style={styles.species}>{species.name}</Text>
+          <Text style={styles.scientificName}>{species.scientificName}</Text>
+        </View>
       </View>
+      {hasDetails && (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`${expanded ? 'Ocultar' : 'Mostrar'} informações sobre ${species.name}`}
+          accessibilityState={{ expanded }}
+          onPress={() => setExpanded(!expanded)}
+          style={styles.expandButton}
+        >
+          <Text style={styles.expandText}>{expanded ? 'Menos informações' : 'Conhecer a espécie'}</Text>
+          <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={20} color={theme.colors.primary} />
+        </Pressable>
+      )}
+      {expanded && (
+        <View style={styles.details}>
+          {species.description && (
+            <View style={styles.descriptionBox}>
+              <Ionicons name="information-circle-outline" size={20} color={theme.colors.primary} />
+              <Text style={styles.descriptionText}>{species.description}</Text>
+            </View>
+          )}
+          {species.tips && (
+            <View style={styles.tipsBox}>
+              <Ionicons name="bulb-outline" size={20} color={theme.colors.success} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.tipsLabel}>Dicas</Text>
+                <Text style={styles.tipsText}>{species.tips}</Text>
+              </View>
+            </View>
+          )}
+        </View>
+      )}
     </View>
   );
 }
@@ -93,52 +100,39 @@ export default function CollectionScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Minha Coleção</Text>
-        <Text style={styles.headerSubtitle}>
-          {species.length === 0
-            ? 'Nenhuma espécie ainda'
-            : `${species.length} ${species.length === 1 ? 'espécie catalogada' : 'espécies catalogadas'}`}
-        </Text>
-        <View style={styles.searchRow}>
+      <ScreenHeader
+        title="Coleção"
+        subtitle={loading ? 'Explore o catálogo de aves' : `${species.length} ${species.length === 1 ? 'espécie catalogada' : 'espécies catalogadas'}`}
+      >
           <View style={styles.searchBox}>
-            <Ionicons name="search-outline" size={16} color="rgba(255,255,255,0.7)" />
+            <Ionicons name="search-outline" size={20} color={theme.colors.textSecondary} />
             <TextInput
+              accessibilityLabel="Buscar espécies"
               style={styles.searchInput}
-              placeholder="Buscar por nome ou nome científico..."
-              placeholderTextColor="rgba(255,255,255,0.7)"
+              placeholder="Nome ou nome científico"
+              placeholderTextColor={theme.colors.textSecondary}
               value={search}
               onChangeText={setSearch}
             />
+            {search.length > 0 && <IconButton icon="close" label="Limpar busca" onPress={() => setSearch('')} />}
           </View>
-        </View>
-      </View>
+      </ScreenHeader>
 
       {loading ? (
         <View style={styles.statusBox}>
-          <ActivityIndicator color="#2563eb" />
-          <Text style={styles.statusText}>Carregando espécies...</Text>
+          <ScreenState loading title="Carregando espécies..." />
         </View>
       ) : error ? (
         <View style={styles.statusBox}>
-          <Ionicons name="cloud-offline-outline" size={36} color="rgba(0,0,0,0.4)" />
-          <Text style={styles.statusText}>{error}</Text>
-          <TouchableOpacity style={styles.retryBtn} onPress={loadSpecies}>
-            <Text style={styles.retryBtnText}>Tentar novamente</Text>
-          </TouchableOpacity>
+          <ScreenState title="Não foi possível carregar" message={error} icon="cloud-offline-outline" actionLabel="Tentar novamente" onAction={loadSpecies} />
         </View>
       ) : filtered.length === 0 ? (
         <View style={styles.statusBox}>
-          <Ionicons name="leaf-outline" size={36} color="rgba(0,0,0,0.3)" />
-          <Text style={styles.emptyTitle}>
-            {term ? 'Nenhuma espécie encontrada' : 'Nenhuma espécie cadastrada'}
-          </Text>
-          <Text style={styles.emptyText}>
-            {term
+          <ScreenState title={term ? 'Nenhuma espécie encontrada' : 'Nenhuma espécie cadastrada'}
+            message={term
               ? 'Tente ajustar sua busca.'
               : 'Assim que houver espécies cadastradas, elas aparecerão aqui.'}
-          </Text>
+          />
         </View>
       ) : (
         <FlatList
@@ -146,6 +140,7 @@ export default function CollectionScreen() {
           keyExtractor={(item) => String(item.id)}
           renderItem={({ item }) => <SpeciesCard species={item} />}
           contentContainerStyle={styles.list}
+          keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         />
       )}
@@ -154,75 +149,57 @@ export default function CollectionScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: 'white' },
-
-  header: {
-    backgroundColor: '#2563eb',
-    paddingTop: 56,
-    paddingBottom: 20,
-    paddingHorizontal: 16,
-    gap: 10,
-  },
-  headerTitle: { fontSize: 24, fontWeight: 'bold', color: 'white' },
-  headerSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.8)' },
-  searchRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4 },
+  container: { flex: 1, backgroundColor: theme.colors.background },
   searchBox: {
     flex: 1, flexDirection: 'row', alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 12,
-    paddingHorizontal: 12, paddingVertical: 10, gap: 8,
+    backgroundColor: theme.colors.background, borderRadius: theme.radius.md,
+    paddingHorizontal: 12, gap: 8, borderWidth: 1, borderColor: theme.colors.border,
   },
-  searchInput: { flex: 1, fontSize: 14, color: 'white' },
-
-  list: { padding: 16, gap: 20, paddingBottom: 40 },
+  searchInput: { flex: 1, minHeight: 52, paddingVertical: 12, fontSize: theme.fonts.sizes.md, color: theme.colors.textPrimary },
+  list: { padding: theme.spacing.md, gap: theme.spacing.md, paddingBottom: theme.spacing.lg },
 
   card: {
-    backgroundColor: 'white', borderRadius: 16, overflow: 'hidden',
-    shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 8, elevation: 3,
-    borderWidth: 1, borderColor: '#f3f4f6',
+    backgroundColor: theme.colors.surface, borderRadius: theme.radius.lg,
+    padding: theme.spacing.md, gap: theme.spacing.sm,
+    borderWidth: StyleSheet.hairlineWidth, borderColor: theme.colors.border,
   },
-  imageContainer: { position: 'relative' },
-  image: { width: '100%', height: 220 },
+  summary: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md },
+  imageContainer: { width: 88, height: 88, borderRadius: theme.radius.md, overflow: 'hidden' },
+  image: { width: '100%', height: '100%' },
   imagePlaceholder: {
-    backgroundColor: '#f3f4f6', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: theme.colors.background, alignItems: 'center', justifyContent: 'center',
   },
 
-  cardBody: { padding: 16, gap: 6 },
-  species: { fontSize: 20, fontWeight: 'bold', color: '#000' },
+  cardBody: { flex: 1, gap: 6 },
+  species: { fontSize: theme.fonts.sizes.lg, fontWeight: '700', color: theme.colors.textPrimary },
   scientificName: {
-    fontSize: 13, color: 'rgba(0,0,0,0.5)',
+    fontSize: theme.fonts.sizes.sm, color: theme.colors.textSecondary,
     fontStyle: 'italic', marginBottom: 4,
   },
 
   descriptionBox: {
     flexDirection: 'row', gap: 8,
-    backgroundColor: '#f0f7ff', borderRadius: 10, padding: 12, marginVertical: 4,
+    backgroundColor: theme.colors.infoSurface, borderRadius: theme.radius.md, padding: 12, marginVertical: 4,
   },
   descriptionText: {
-    flex: 1, fontSize: 13, color: 'rgba(0,0,0,0.7)', lineHeight: 19,
+    flex: 1, fontSize: theme.fonts.sizes.md, color: theme.colors.textSecondary, lineHeight: 24,
   },
 
   tipsBox: {
     flexDirection: 'row', gap: 8,
-    backgroundColor: '#f0fdf4', borderRadius: 10, padding: 12, marginTop: 4,
-    borderLeftWidth: 3, borderLeftColor: '#16a34a',
+    backgroundColor: theme.colors.successSurface, borderRadius: theme.radius.md, padding: 12, marginTop: 4,
+    borderLeftWidth: 3, borderLeftColor: theme.colors.success,
   },
   tipsLabel: {
-    fontSize: 12, fontWeight: 'bold', color: '#16a34a',
+    fontSize: theme.fonts.sizes.sm, fontWeight: '600', color: theme.colors.success,
     marginBottom: 2, textTransform: 'uppercase', letterSpacing: 0.4,
   },
-  tipsText: { fontSize: 13, color: 'rgba(0,0,0,0.75)', lineHeight: 19 },
+  tipsText: {   fontSize: theme.fonts.sizes.md, color: theme.colors.textSecondary, lineHeight: 24 },
 
   statusBox: {
-    flex: 1, alignItems: 'center', justifyContent: 'center',
-    paddingHorizontal: 32, gap: 10,
+    flex: 1, justifyContent: 'center', padding: theme.spacing.md,
   },
-  statusText: { fontSize: 13, color: 'rgba(0,0,0,0.6)', textAlign: 'center' },
-  emptyTitle: { fontSize: 17, fontWeight: 'bold', color: '#000', marginTop: 6 },
-  emptyText: { fontSize: 13, color: 'rgba(0,0,0,0.5)', textAlign: 'center', lineHeight: 19 },
-
-  retryBtn: {
-    backgroundColor: '#2563eb', paddingHorizontal: 16, paddingVertical: 8,
-    borderRadius: 20, marginTop: 4,
-  },
-  retryBtnText: { color: 'white', fontWeight: 'bold', fontSize: 13 },
+  expandButton: { minHeight: theme.touchTarget, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: theme.spacing.sm },
+  expandText: { flex: 1, color: theme.colors.primary, fontSize: theme.fonts.sizes.sm, fontWeight: '600' },
+  details: { gap: theme.spacing.sm },
 });

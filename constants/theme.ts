@@ -1,38 +1,36 @@
 export const theme = {
   colors: {
-    // Cores principais (baseado no BirdBuddy)
-    primary: '#2D6A4F',        // verde escuro (header, botões)
-    primaryLight: '#52B788',   // verde claro
-    background: '#F5F0E8',     // bege (fundo das telas)
-    surface: '#FFFFFF',        // branco (cards)
-    
-    // Textos
-    textPrimary: '#1B1B1B',    // quase preto
-    textSecondary: '#6B6B6B',  // cinza
-    textLight: '#FFFFFF',      // branco (em fundos escuros)
-    
-    // Badges
-    confidenceHigh: '#2D6A4F', // verde (>90% confiança)
-    confidenceMed: '#F4A261',  // laranja (70-90%)
-    confidenceLow: '#E76F51',  // vermelho (<70%)
-    
-    // Live badge
-    live: '#E63946',           // vermelho do "AO VIVO"
-    
-    // Bordas e separadores
-    border: '#E0D9CC',
+    primary: '#2563EB',
+    primaryDark: '#1D4ED8',
+    primaryLight: '#DBEAFE',
+    background: '#F3F4F6',
+    surface: '#FFFFFF',
+    textPrimary: '#111827',
+    textSecondary: '#4B5563',
+    textLight: '#FFFFFF',
+    border: '#D1D5DB',
+    infoSurface: '#EFF6FF',
+    success: '#15803D',
+    successSurface: '#F0FDF4',
+    danger: '#B91C1C',
+    dangerSurface: '#FEF2F2',
+    warning: '#92400E',
+    confidenceHigh: '#15803D',
+    confidenceMed: '#92400E',
+    confidenceLow: '#B91C1C',
+    live: '#B91C1C',
   },
 
   fonts: {
     regular: 'System',
     bold: 'System',
     sizes: {
-      xs: 11,
-      sm: 13,
-      md: 15,
+      xs: 12,
+      sm: 14,
+      md: 16,
       lg: 18,
-      xl: 22,
-      xxl: 28,
+      xl: 24,
+      xxl: 30,
     },
   },
 
@@ -50,4 +48,5 @@ export const theme = {
     lg: 16,
     full: 999,
   },
+  touchTarget: 48,
 };
