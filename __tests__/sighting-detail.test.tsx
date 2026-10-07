@@ -1,4 +1,4 @@
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { isLoggedIn } from '../services/auth';
 import { fetchSightingById, SightingResponse } from '../services/sightings';
@@ -52,6 +52,8 @@ beforeEach(() => {
   mockFetch.mockResolvedValue({ success: true, data: record });
 });
 
+afterEach(() => jest.useRealTimers());
+
 test('busca pelo ID da rota e abre somente a foto real depois de carregar', async () => {
   const screen = await render(<SightingDetailScreen />);
   await waitFor(() => expect(screen.getAllByText('Sabiá')).toHaveLength(2));
@@ -87,7 +89,7 @@ test('falha de imagem mostra erro e ação para tentar novamente', async () => {
 
 test.each([
   [401, 'Faça login para ver este avistamento.'],
-  [404, 'Avistamento não encontrado.'],
+  [400, 'Falha de rede'],
   [0, 'Falha de rede'],
 ] as const)('apresenta o estado de erro %i', async (status, text) => {
   mockFetch.mockResolvedValueOnce({ success: false, status, message: 'Falha de rede' });
@@ -101,6 +103,70 @@ test.each([
     await fireEvent.press(screen.getByText('Ir para login'));
     expect(replace).toHaveBeenCalledWith('/login');
   }
+});
+
+test('um 404 temporário é consultado novamente sem exibir inexistência ou exigir reload', async () => {
+  jest.useFakeTimers();
+  mockFetch.mockResolvedValueOnce({ success: false, status: 404 });
+  const screen = await render(<SightingDetailScreen />);
+  expect(mockFetch).toHaveBeenCalledTimes(1);
+  expect(screen.getByText('Carregando avistamento...')).toBeTruthy();
+  expect(screen.queryByText('Avistamento não encontrado.')).toBeNull();
+
+  await act(async () => { jest.advanceTimersByTime(500); });
+  expect(mockFetch).toHaveBeenCalledTimes(2);
+  expect(screen.getAllByText('Sabiá')).toHaveLength(2);
+});
+
+test('404 persistente limita a nova consulta e permite tentar de novo na própria tela', async () => {
+  jest.useFakeTimers();
+  const notFound = { success: false, status: 404 };
+  mockFetch.mockResolvedValueOnce(notFound).mockResolvedValueOnce(notFound);
+  const screen = await render(<SightingDetailScreen />);
+  await act(async () => { jest.advanceTimersByTime(500); });
+  expect(screen.getByText('Avistamento não encontrado.')).toBeTruthy();
+  await act(async () => { jest.advanceTimersByTime(5000); });
+  expect(mockFetch).toHaveBeenCalledTimes(2);
+
+  await fireEvent.press(screen.getByText('Tentar novamente'));
+  expect(mockFetch).toHaveBeenCalledTimes(3);
+  expect(screen.getAllByText('Sabiá')).toHaveLength(2);
+});
+
+test('trocar de avistamento cancela a consulta agendada do registro anterior', async () => {
+  jest.useFakeTimers();
+  mockFetch.mockResolvedValueOnce({ success: false, status: 404 });
+  const screen = await render(<SightingDetailScreen />);
+  mockParams.mockReturnValue({ id: 'record-7' });
+  mockFetch.mockResolvedValueOnce({ success: true, data: { ...record, id: 'record-7' } });
+  await screen.rerender(<SightingDetailScreen />);
+  await act(async () => { jest.advanceTimersByTime(500); });
+  expect(mockFetch.mock.calls).toEqual([['record-6'], ['record-7']]);
+  expect(screen.queryByText('Avistamento não encontrado.')).toBeNull();
+  expect(screen.getAllByText('Sabiá')).toHaveLength(2);
+});
+
+test('aguarda o parâmetro da rota antes de decidir que o avistamento não existe', async () => {
+  mockParams.mockReturnValue({});
+  const screen = await render(<SightingDetailScreen />);
+  expect(screen.getByText('Carregando avistamento...')).toBeTruthy();
+  expect(screen.queryByText('Avistamento não encontrado.')).toBeNull();
+  expect(mockFetch).not.toHaveBeenCalled();
+  mockParams.mockReturnValue({ id: 'record-6' });
+  await screen.rerender(<SightingDetailScreen />);
+  await waitFor(() => expect(screen.getAllByText('Sabiá')).toHaveLength(2));
+  expect(mockFetch).toHaveBeenCalledWith('record-6');
+});
+
+test('aceita um único ID em array, mas não consulta IDs ambíguos', async () => {
+  mockParams.mockReturnValue({ id: ['record-6'] });
+  const screen = await render(<SightingDetailScreen />);
+  await waitFor(() => expect(screen.getAllByText('Sabiá')).toHaveLength(2));
+  expect(mockFetch).toHaveBeenCalledWith('record-6');
+  mockParams.mockReturnValue({ id: ['record-6', 'record-7'] });
+  await screen.rerender(<SightingDetailScreen />);
+  expect(screen.getByText('Avistamento não encontrado.')).toBeTruthy();
+  expect(mockFetch).toHaveBeenCalledTimes(1);
 });
 
 test('ID inválido não consulta a API', async () => {

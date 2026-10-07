@@ -104,7 +104,7 @@ export default function CollectionScreen() {
         title="Coleção"
         subtitle={loading ? 'Explore o catálogo de aves' : `${species.length} ${species.length === 1 ? 'espécie catalogada' : 'espécies catalogadas'}`}
       >
-          <View style={styles.searchBox}>
+          <View testID="species-search-box" style={styles.searchBox}>
             <Ionicons name="search-outline" size={20} color={theme.colors.textSecondary} />
             <TextInput
               accessibilityLabel="Buscar espécies"
@@ -151,11 +151,11 @@ export default function CollectionScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.colors.background },
   searchBox: {
-    flex: 1, flexDirection: 'row', alignItems: 'center',
+    minHeight: 52, flexShrink: 0, flexDirection: 'row', alignItems: 'center',
     backgroundColor: theme.colors.background, borderRadius: theme.radius.md,
     paddingHorizontal: 12, gap: 8, borderWidth: 1, borderColor: theme.colors.border,
   },
-  searchInput: { flex: 1, minHeight: 52, paddingVertical: 12, fontSize: theme.fonts.sizes.md, color: theme.colors.textPrimary },
+  searchInput: { flex: 1, minWidth: 0, minHeight: 52, paddingVertical: 12, fontSize: theme.fonts.sizes.md, color: theme.colors.textPrimary },
   list: { padding: theme.spacing.md, gap: theme.spacing.md, paddingBottom: theme.spacing.lg },
 
   card: {

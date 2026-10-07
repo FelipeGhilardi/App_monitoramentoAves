@@ -18,6 +18,12 @@ estenda essa escala antes de adicionar cores ou tamanhos locais.
   Teste fonte em 200%, teclado aberto, nomes longos, erros e conteúdo vazio.
 - Coleção continua sendo o catálogo da API; não implica favoritos ou descoberta
   pessoal. Cards podem expandir descrição e dicas, sem outra rota.
+  A busca tem altura própria no cabeçalho, sem `flex: 1` no eixo vertical; o
+  campo deve encolher horizontalmente para acomodar a ação de limpar.
+- O detalhe aguarda o ID da rota e confirma um 404 com uma única nova consulta
+  após 500 ms. Um 404 persistente oferece nova tentativa sem recarregar o app;
+  respostas 400 continuam sendo erros de consulta, não prova de inexistência.
+  A confirmação pendente é cancelada ao sair ou trocar de registro.
 - Estatísticas preservam os cálculos existentes e oferecem 7, 30 e 90 dias,
   iniciando em 7. Os valores dos gráficos também ficam disponíveis como texto.
 - Configurações reusa conta, edição e logout; Sobre permanece na quarta aba.

@@ -44,6 +44,17 @@ test('busca por nome, busca vazia e limpar busca mantêm o catálogo', async () 
   expect(screen.getByText('Outra ave')).toBeTruthy();
 });
 
+test('campo de busca mantém altura própria e espaço para limpar o texto', async () => {
+  const screen = await render(<CollectionScreen />);
+  await waitFor(() => expect(screen.getByText('Ave de teste')).toBeTruthy());
+  expect(screen.getByTestId('species-search-box')).toHaveStyle({ minHeight: 52, flexShrink: 0 });
+  expect(screen.getByTestId('species-search-box').props.style.flex).toBeUndefined();
+  expect(screen.getByLabelText('Buscar espécies')).toHaveStyle({ minWidth: 0, minHeight: 52 });
+  await fireEvent.changeText(screen.getByLabelText('Buscar espécies'), 'Avis syntheticus');
+  expect(screen.getByLabelText('Limpar busca')).toBeTruthy();
+  expect(screen.getByTestId('species-search-box')).toHaveStyle({ minHeight: 52, flexShrink: 0 });
+});
+
 test('falha de rede é visível e permite repetir o carregamento', async () => {
   jest.mocked(fetchSpecies).mockResolvedValueOnce({ success: false, message: 'Falha sintética de rede' });
   const screen = await render(<CollectionScreen />);

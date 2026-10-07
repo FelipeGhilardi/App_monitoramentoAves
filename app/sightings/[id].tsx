@@ -15,9 +15,11 @@ import {
 } from '../../services/sightings';
 
 type PageStatus = 'loading' | 'ready' | 'unauthorized' | 'not-found' | 'error';
+const NOT_FOUND_RECHECK_DELAY_MS = 500;
 
 export default function SightingDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id: routeId } = useLocalSearchParams<{ id?: string | string[] }>();
+  const id = Array.isArray(routeId) ? (routeId.length === 1 ? routeId[0] : '') : routeId;
   const router = useRouter();
   const [status, setStatus] = useState<PageStatus>('loading');
   const [sighting, setSighting] = useState<SightingResponse | null>(null);
@@ -30,21 +32,27 @@ export default function SightingDetailScreen() {
 
   useEffect(() => {
     let active = true;
+    let recheckedNotFound = false;
+    let recheckTimer: ReturnType<typeof setTimeout> | undefined;
     setStatus('loading');
     setSighting(null);
+    setError('');
     setImageLoaded(false);
     setImageError(false);
     setShowImage(false);
 
     const load = async () => {
-      if (typeof id !== 'string' || !id.trim()) {
+      if (id === undefined) return;
+      if (!id.trim()) {
         setStatus('not-found');
         return;
       }
 
       try {
-        if (!(await isLoggedIn())) {
-          if (active) setStatus('unauthorized');
+        const loggedIn = await isLoggedIn();
+        if (!active) return;
+        if (!loggedIn) {
+          setStatus('unauthorized');
           return;
         }
 
@@ -55,8 +63,13 @@ export default function SightingDetailScreen() {
           setStatus('ready');
         } else if (result.status === 401) {
           setStatus('unauthorized');
-        } else if (result.status === 404 || result.status === 400) {
-          setStatus('not-found');
+        } else if (result.status === 404) {
+          if (!recheckedNotFound) {
+            recheckedNotFound = true;
+            recheckTimer = setTimeout(() => { if (active) void load(); }, NOT_FOUND_RECHECK_DELAY_MS);
+          } else {
+            setStatus('not-found');
+          }
         } else {
           setError(result.message ?? 'Não foi possível carregar o avistamento.');
           setStatus('error');
@@ -70,7 +83,10 @@ export default function SightingDetailScreen() {
     };
 
     void load();
-    return () => { active = false; };
+    return () => {
+      active = false;
+      clearTimeout(recheckTimer);
+    };
   }, [id, retryCount]);
 
   const goBack = () => {
@@ -108,7 +124,7 @@ export default function SightingDetailScreen() {
               <Text style={styles.actionText}>Ir para login</Text>
             </Pressable>
           )}
-          {status === 'error' && (
+          {(status === 'error' || (status === 'not-found' && Boolean(id?.trim()))) && (
             <Pressable
               onPress={() => setRetryCount((count) => count + 1)}
               accessibilityRole="button"
