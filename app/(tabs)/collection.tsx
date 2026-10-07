@@ -10,22 +10,41 @@ import { theme } from '../../constants/theme';
 import ScreenHeader from '../../components/ScreenHeader';
 import ScreenState from '../../components/ScreenState';
 import IconButton from '../../components/IconButton';
+import SightingImageViewer from '../../components/SightingImageViewer';
 
-function SpeciesCard({ species }: { species: SpeciesResponse }) {
+function SpeciesCard({ species, onImagePress }: {
+  species: SpeciesResponse;
+  onImagePress: (uri: string) => void;
+}) {
   const [expanded, setExpanded] = useState(false);
   const hasDetails = Boolean(species.description || species.tips);
+  const imageUrl = species.imageUrl?.trim() || null;
   return (
     <View style={styles.card}>
       <View style={styles.summary}>
-        <View style={styles.imageContainer}>
-          {species.imageUrl ? (
-            <Image source={{ uri: species.imageUrl }} style={styles.image} contentFit="cover" />
-          ) : (
-            <View style={[styles.image, styles.imagePlaceholder]}>
-              <Ionicons name="image-outline" size={32} color={theme.colors.textSecondary} />
+        {imageUrl ? (
+          <Pressable
+            onPress={() => onImagePress(imageUrl)}
+            accessibilityRole="button"
+            accessibilityLabel={`Ampliar foto de ${species.name}`}
+            accessibilityHint="Abre a imagem com controles de zoom."
+            style={({ pressed }) => [styles.imageContainer, pressed && { opacity: 0.7 }]}
+          >
+            <Image source={{ uri: imageUrl }} style={styles.image} contentFit="cover" />
+            <View pointerEvents="none" style={styles.zoomHint}>
+              <Ionicons name="expand-outline" size={theme.fonts.sizes.md} color={theme.colors.primary} />
             </View>
-          )}
-        </View>
+          </Pressable>
+        ) : (
+          <View
+            accessible
+            accessibilityRole="image"
+            accessibilityLabel={`Sem foto de ${species.name}`}
+            style={[styles.imageContainer, styles.imagePlaceholder]}
+          >
+            <Ionicons name="image-outline" size={32} color={theme.colors.textSecondary} />
+          </View>
+        )}
         <View style={styles.cardBody}>
           <Text style={styles.species}>{species.name}</Text>
           <Text style={styles.scientificName}>{species.scientificName}</Text>
@@ -71,6 +90,7 @@ export default function CollectionScreen() {
   const [species, setSpecies] = useState<SpeciesResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedImage, setSelectedImage] = useState<{ uri: string; name: string } | null>(null);
 
   const loadSpecies = useCallback(async () => {
     setLoading(true);
@@ -138,10 +158,22 @@ export default function CollectionScreen() {
         <FlatList
           data={filtered}
           keyExtractor={(item) => String(item.id)}
-          renderItem={({ item }) => <SpeciesCard species={item} />}
+          renderItem={({ item }) => (
+            <SpeciesCard
+              species={item}
+              onImagePress={(uri) => setSelectedImage({ uri, name: item.name })}
+            />
+          )}
           contentContainerStyle={styles.list}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
+        />
+      )}
+      {selectedImage && (
+        <SightingImageViewer
+          uri={selectedImage.uri}
+          accessibilityLabel={`Foto de ${selectedImage.name} ampliada`}
+          onClose={() => setSelectedImage(null)}
         />
       )}
     </View>
@@ -168,6 +200,10 @@ const styles = StyleSheet.create({
   image: { width: '100%', height: '100%' },
   imagePlaceholder: {
     backgroundColor: theme.colors.background, alignItems: 'center', justifyContent: 'center',
+  },
+  zoomHint: {
+    position: 'absolute', right: theme.spacing.xs, bottom: theme.spacing.xs,
+    padding: theme.spacing.xs, borderRadius: theme.radius.sm, backgroundColor: theme.colors.surface,
   },
 
   cardBody: { flex: 1, gap: 6 },

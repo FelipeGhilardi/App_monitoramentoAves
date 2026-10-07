@@ -23,6 +23,12 @@ estenda essa escala antes de adicionar cores ou tamanhos locais.
   pessoal. Cards podem expandir descrição e dicas, sem outra rota.
   A busca tem altura própria no cabeçalho, sem `flex: 1` no eixo vertical; o
   campo deve encolher horizontalmente para acomodar a ação de limpar.
+  Fotos disponíveis abrem ao toque no mesmo visualizador dos avistamentos, com
+  zoom por pinça ou botões de 1x a 4x. Fechar mantém a busca e os cards expandidos;
+  espécies sem foto não oferecem uma ação vazia.
+- `SightingImageViewer` recebe `uri`, `onClose` e `accessibilityLabel` opcional.
+  A coleção informa o nome da espécie; sem o rótulo, permanece o texto padrão
+  do avistamento. Erros de imagem permitem tentar novamente ou fechar.
 - O detalhe aguarda o ID da rota e confirma um 404 com uma única nova consulta
   após 500 ms. Um 404 persistente oferece nova tentativa sem recarregar o app;
   respostas 400 continuam sendo erros de consulta, não prova de inexistência.

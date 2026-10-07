@@ -15,9 +15,12 @@ import { theme } from '../constants/theme';
 interface Props {
   uri: string;
   onClose: () => void;
+  accessibilityLabel?: string;
 }
 
-export default function SightingImageViewer({ uri, onClose }: Props) {
+export default function SightingImageViewer({
+  uri, onClose, accessibilityLabel = 'Foto do avistamento ampliada',
+}: Props) {
   const insets = useSafeAreaInsets();
   const [viewport, setViewport] = useState({ width: 0, height: 0 });
   const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
@@ -127,7 +130,7 @@ export default function SightingImageViewer({ uri, onClose }: Props) {
                   style={styles.image}
                   contentFit="contain"
                   testID="full-screen-photo"
-                  accessibilityLabel="Foto do avistamento ampliada"
+                  accessibilityLabel={accessibilityLabel}
                   onLoad={({ source }) => {
                     if (source.width > 0 && source.height > 0) {
                       setImageSize({ width: source.width, height: source.height });
