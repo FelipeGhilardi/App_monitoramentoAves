@@ -1,12 +1,15 @@
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import HomeScreen from '../app/(tabs)/index';
 import { getCurrentUser, logout, updateProfile, UserResponse } from '../services/auth';
 import appConfig from '../app.json';
+import { theme } from '../constants/theme';
 import { fetchSightings, SightingResponse } from '../services/sightings';
 
 jest.mock('expo-image', () => ({ Image: require('react-native').Image }));
 jest.mock('expo-router', () => ({ useRouter: jest.fn() }));
+jest.mock('react-native-safe-area-context', () => jest.requireActual('react-native-safe-area-context'));
 jest.mock('../services/auth', () => ({
   getCurrentUser: jest.fn(), updateProfile: jest.fn(), logout: jest.fn(),
 }));
@@ -32,6 +35,15 @@ const sightings: SightingResponse[] = Array.from({ length: 6 }, (_, index) => ({
   imageUrl: null, createdAt: '', updatedAt: '',
 }));
 
+const renderHome = () => render(
+  <SafeAreaProvider initialMetrics={{
+    frame: { x: 0, y: 0, width: 360, height: 800 },
+    insets: { top: 24, right: 0, bottom: 16, left: 0 },
+  }}>
+    <HomeScreen />
+  </SafeAreaProvider>
+);
+
 beforeEach(() => {
   jest.clearAllMocks();
   jest.mocked(useRouter).mockReturnValue({
@@ -48,7 +60,7 @@ test('Configurações exibe conta e versão, abre edição real e reflete os dad
   jest.mocked(getCurrentUser).mockResolvedValue(user);
   const updated = { ...user, name: 'Pessoa atualizada' };
   jest.mocked(updateProfile).mockResolvedValue({ success: true, user: updated });
-  const screen = await render(<HomeScreen />);
+  const screen = await renderHome();
   await waitFor(() => expect(screen.getByLabelText('Ver avistamento: Ave 1')).toBeTruthy());
   await fireEvent.press(screen.getByLabelText('Abrir configurações'));
   await waitFor(() => expect(screen.getByText('Configurações')).toBeTruthy());
@@ -69,7 +81,7 @@ test('Configurações exibe conta e versão, abre edição real e reflete os dad
 test('Configurações acessa a aba Sobre e o logout já existente', async () => {
   jest.mocked(getCurrentUser).mockResolvedValue(user);
   jest.mocked(logout).mockResolvedValue(undefined);
-  const screen = await render(<HomeScreen />);
+  const screen = await renderHome();
   await waitFor(() => expect(screen.getByLabelText('Ver avistamento: Ave 1')).toBeTruthy());
   await fireEvent.press(screen.getByLabelText('Abrir configurações'));
   await waitFor(() => expect(screen.getByText('Sobre o Projeto')).toBeTruthy());
@@ -85,7 +97,7 @@ test('Configurações acessa a aba Sobre e o logout já existente', async () => 
 
 test('falha ao carregar a conta não abre Configurações sem dados', async () => {
   jest.mocked(getCurrentUser).mockResolvedValueOnce(user).mockRejectedValueOnce(new Error('storage unavailable'));
-  const screen = await render(<HomeScreen />);
+  const screen = await renderHome();
   await waitFor(() => expect(screen.getByLabelText('Ver avistamento: Ave 1')).toBeTruthy());
   await fireEvent.press(screen.getByLabelText('Abrir configurações'));
   await waitFor(() => expect(screen.getByText('Não foi possível carregar seus dados. Tente novamente.')).toBeTruthy());
@@ -95,7 +107,7 @@ test('falha ao carregar a conta não abre Configurações sem dados', async () =
 test('falha no logout mantém Configurações abertas e permite nova tentativa', async () => {
   jest.mocked(getCurrentUser).mockResolvedValue(user);
   jest.mocked(logout).mockRejectedValueOnce(new Error('storage unavailable')).mockResolvedValueOnce(undefined);
-  const screen = await render(<HomeScreen />);
+  const screen = await renderHome();
   await waitFor(() => expect(screen.getByLabelText('Ver avistamento: Ave 1')).toBeTruthy());
   await fireEvent.press(screen.getByLabelText('Abrir configurações'));
   await waitFor(() => expect(screen.getByText('Sair da conta')).toBeTruthy());
@@ -108,7 +120,7 @@ test('falha no logout mantém Configurações abertas e permite nova tentativa',
   expect(logout).toHaveBeenCalledTimes(2);
 });
 test('o cartão da Home navega para o detalhe e o botão de vídeo não existe', async () => {
-  const screen = await render(<HomeScreen />);
+  const screen = await renderHome();
   await waitFor(() => expect(screen.getByLabelText('Ver avistamento: Ave 1')).toBeTruthy());
   await fireEvent.press(screen.getByLabelText('Ver avistamento: Ave 1'));
   expect(push).toHaveBeenCalledWith({ pathname: '/sightings/[id]', params: { id: 'id-1' } });
@@ -116,10 +128,37 @@ test('o cartão da Home navega para o detalhe e o botão de vídeo não existe',
   expect(screen.queryByText('Acessar câmera ao vivo')).toBeNull();
 });
 
-test('Ver tudo permite navegar para um avistamento além dos cinco recentes', async () => {
-  const screen = await render(<HomeScreen />);
+test('Ver tudo usa a área segura do modal e navega para além dos cinco recentes', async () => {
+  const screen = await renderHome();
   await waitFor(() => expect(screen.getByText('Ver tudo')).toBeTruthy());
+  expect(screen.queryByText('Todos os avistamentos')).toBeNull();
   await fireEvent.press(screen.getByText('Ver tudo'));
+  expect(screen.getByText('Todos os avistamentos')).toBeTruthy();
+  const modalArea = screen.getByTestId('all-sightings-safe-area');
+  expect(modalArea).toHaveStyle({ flex: 1 });
+  await fireEvent(modalArea, 'insetsChange', {
+    nativeEvent: {
+      frame: { x: 0, y: 0, width: 360, height: 760 },
+      insets: { top: 0, right: 0, bottom: 0, left: 0 },
+    },
+  });
+  const modalHeader = screen.getByText('Todos os avistamentos').parent?.parent?.parent;
+  expect(modalHeader).toHaveStyle({ paddingTop: theme.spacing.sm });
   await fireEvent.press(screen.getByLabelText('Ver avistamento: Ave 6'));
   expect(push).toHaveBeenCalledWith({ pathname: '/sightings/[id]', params: { id: 'id-6' } });
+  expect(screen.queryByText('Todos os avistamentos')).toBeNull();
+});
+
+test('Ver tudo pode ser fechado e reaberto sem perder a lista', async () => {
+  const screen = await renderHome();
+  await waitFor(() => expect(screen.getByText('Ver tudo')).toBeTruthy());
+  await fireEvent.press(screen.getByText('Ver tudo'));
+  expect(screen.getByLabelText('Ver avistamento: Ave 6')).toBeTruthy();
+  await fireEvent.press(screen.getByLabelText('Voltar'));
+  expect(screen.queryByText('Todos os avistamentos')).toBeNull();
+  expect(screen.queryByLabelText('Ver avistamento: Ave 6')).toBeNull();
+  await fireEvent.press(screen.getByText('Ver tudo'));
+  expect(screen.getByText('Todos os avistamentos')).toBeTruthy();
+  expect(screen.getByLabelText('Ver avistamento: Ave 6')).toBeTruthy();
+  expect(mockFetch).toHaveBeenCalledTimes(1);
 });

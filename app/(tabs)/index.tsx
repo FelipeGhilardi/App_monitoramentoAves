@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, FlatList, Pressable, Modal } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { getCurrentUser, logout, UserResponse } from '../../services/auth';
@@ -39,17 +39,19 @@ function AllSightingsModal({ visible, onClose, sightings, onSelect }: {
 }) {
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <SafeAreaView edges={['bottom']} style={styles.container}>
-        <ScreenHeader title="Todos os avistamentos" onBack={onClose} />
-        <FlatList
-          data={sightings}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.section}
-          renderItem={({ item }) => <SightingCard sighting={item} onPress={() => onSelect(item.id)} />}
-          ListEmptyComponent={<ScreenState title="Nenhum avistamento ainda" message="Quando houver registros, eles aparecerão aqui." />}
-          showsVerticalScrollIndicator={false}
-        />
-      </SafeAreaView>
+      <SafeAreaProvider testID="all-sightings-safe-area" style={styles.container}>
+        <SafeAreaView edges={['bottom']} style={styles.container}>
+          <ScreenHeader title="Todos os avistamentos" onBack={onClose} />
+          <FlatList
+            data={sightings}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.section}
+            renderItem={({ item }) => <SightingCard sighting={item} onPress={() => onSelect(item.id)} />}
+            ListEmptyComponent={<ScreenState title="Nenhum avistamento ainda" message="Quando houver registros, eles aparecerão aqui." />}
+            showsVerticalScrollIndicator={false}
+          />
+        </SafeAreaView>
+      </SafeAreaProvider>
     </Modal>
   );
 }

@@ -12,6 +12,9 @@ estenda essa escala antes de adicionar cores ou tamanhos locais.
 - `ScreenHeader`, `IconButton`, `FormField` e `ScreenState` compartilham os padrões.
   Cabeçalhos aplicam o inset superior; não adicione uma segunda safe area superior.
   Modais e conteúdo aplicam o inset inferior quando necessário.
+- O modal "Todos os avistamentos" tem um `SafeAreaProvider` próprio dentro do
+  `Modal`, antes do `SafeAreaView`. No Android, essa janela tem uma árvore nativa
+  separada; o provider da tela principal não substitui o provider do modal.
 - Layout é mobile-first com Flexbox. Imagens seguem o contêiner e gráficos medem
   sua área com `onLayout`. Não use a largura da janela capturada no carregamento.
 - 320, 360 e 412 são larguras lógicas de conferência, não breakpoints de aparelhos.
