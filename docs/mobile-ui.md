@@ -36,9 +36,52 @@ estenda essa escala antes de adicionar cores ou tamanhos locais.
 - Estatísticas preservam os cálculos existentes e oferecem 7, 30 e 90 dias,
   iniciando em 7. Os valores dos gráficos também ficam disponíveis como texto.
 - Configurações reusa conta, edição e logout; Sobre permanece na quarta aba.
-  Não há novas preferências ou integração de câmera/bateria.
-- O sino preserva seu conteúdo demonstrativo atual. Este refinamento não habilita
-  push nem atualização automática. Recuperação de senha permanece fora do escopo.
+  A preferência de push é por conta; permissão Android e cadastro do dispositivo
+  são estados separados. Não há integração de câmera/bateria.
+- O sino usa histórico individual paginado da API, contador real e leitura ao
+  tocar. Abrir a lista não marca todos. Carregamento, vazio, erro e repetição
+  usam `ScreenState`. Atualizações ocorrem por retomada, push e abertura da caixa,
+  sem polling contínuo. Falhas não são tratadas como confirmação de leitura.
+  O modal de notificações também usa seu próprio `SafeAreaProvider`.
+
+## Push Android
+
+`NotificationProvider` é instalado uma vez no layout raiz. O primeiro acesso
+autenticado registra participação antes de obter token, mesmo com recusa de
+push; falhas não invalidam um login já aceito. O canal `sightings` é criado
+antes de solicitar permissão. O convite explica o uso e solicita a permissão
+somente após tocar em "Ativar alertas"/"Sincronizar alertas"; não repete o
+prompt automaticamente. Uma recusa permite abrir as configurações do Android.
+
+`getDevicePushTokenAsync` fornece FCM nativo, não ExpoPushToken. O installationId
+aleatório fica no AsyncStorage. Retomada e rotação de token reconciliam o
+cadastro; preferência desligada não desativa o histórico. HTTP de notificações
+usa a sessão capturada e descarta respostas de outra conta.
+
+Logout serializa cadastro/desativação antes de limpar a sessão; falha mantém a
+sessão e permite repetir. JWT expirado não tenta desativar usando credencial
+inválida: registra reconciliação pendente e limpa a sessão. O próximo acesso
+válido/cadastro transfere o token com transações do backend. Mensagens já aceitas
+pelo FCM podem chegar após logout; o payload é mínimo e o destino exige login.
+
+O listener de toque e a resposta inicial usam IDs validados e a rota existente
+`/sightings/[id]`, sem URLs arbitrárias. Destino sem sessão aguarda login; push
+de outra conta não abre a caixa atual. A mensagem recebida não é marcada lida:
+somente toque com confirmação da API. Falha aparece na Home/Configurações.
+
+O cliente usa `br.edu.maua.avistai`, projeto `avistai-tcc` e o arquivo público
+`google-services.json`. Nunca incluir a chave Firebase Admin no app.
+O backend agora usa outbox na tabela existente e processamento acionado pelo
+worker; nenhuma rota/ID do app mudou. Se o worker parar, histórico e push podem
+atrasar até a retomada, mesmo que a API de avistamentos esteja disponível.
+Participação continua temporal: entrar depois de um evento pendente não
+importa aquele passado. A chave de envio fica apenas na Lambda HTTP da API,
+nunca neste cliente nem no worker.
+Expo Go/Android SDK 54 não suporta essa validação: use build própria em aparelho
+com Google Play Services, por exemplo `npx expo run:android --device` em máquina
+com SDK/JDK Android configurados. O build release e recebimento real ainda
+exigem validação no aparelho. iOS/web mantêm histórico, sem cadastro de push.
+Não alterar o projeto Android gerado manualmente: configuração vem de app.json.
 
 Os testes de componentes não comprovam layout nativo. A validação final deve
 incluir Android, barras por gestos/botões e permissões/serviços apenas quando

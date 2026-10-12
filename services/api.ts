@@ -32,9 +32,10 @@ export interface ApiError {
  */
 export async function apiFetch<T>(
   path: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  sessionToken?: string
 ): Promise<T> {
-  const token = await getToken();
+  const token = sessionToken ?? await getToken();
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',

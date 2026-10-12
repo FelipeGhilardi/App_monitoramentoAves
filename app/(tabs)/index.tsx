@@ -13,26 +13,8 @@ import ScreenHeader from '../../components/ScreenHeader';
 import ScreenState from '../../components/ScreenState';
 import SettingsModal from '../../components/SettingsModal';
 import SightingCard from '../../components/SightingCard';
-
-function NotificationsModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
-  return (
-    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <SafeAreaView edges={['bottom']} style={styles.container}>
-        <ScreenHeader title="Notificações" onBack={onClose} />
-        <ScrollView contentContainerStyle={styles.section}>
-          <View style={styles.notification}>
-            <Text style={styles.cardTitle}>Novo visitante!</Text>
-            <Text style={styles.bodyText}>Um Cardeal-vermelho foi visto no seu comedouro há 5 minutos.</Text>
-          </View>
-          <View style={styles.notification}>
-            <Text style={styles.cardTitle}>Bateria baixa</Text>
-            <Text style={styles.bodyText}>A câmera do comedouro principal está com 15% de bateria.</Text>
-          </View>
-        </ScrollView>
-      </SafeAreaView>
-    </Modal>
-  );
-}
+import NotificationsModal from '../../components/NotificationsModal';
+import { useNotifications } from '../../services/notification-context';
 
 function AllSightingsModal({ visible, onClose, sightings, onSelect }: {
   visible: boolean; onClose: () => void; sightings: SightingResponse[]; onSelect: (id: string) => void;
@@ -58,6 +40,7 @@ function AllSightingsModal({ visible, onClose, sightings, onSelect }: {
 
 export default function HomeScreen() {
   const router = useRouter();
+  const notifications = useNotifications();
   const [showNotif, setShowNotif] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
@@ -137,12 +120,21 @@ export default function HomeScreen() {
           actions={<>
             <View>
               <IconButton icon="notifications-outline" label="Notificações" onPress={() => setShowNotif(true)} />
-              <View pointerEvents="none" style={styles.notifDot}><Text style={styles.notifDotText}>1</Text></View>
+              {notifications.unreadCount > 0 && <View pointerEvents="none" style={styles.notifDot}>
+                <Text style={styles.notifDotText}>{notifications.unreadCount > 99 ? '99+' : notifications.unreadCount}</Text>
+              </View>}
             </View>
             <IconButton icon="person-outline" label="Abrir perfil" onPress={openProfile} />
             <IconButton icon="settings-outline" label="Abrir configurações" onPress={openSettings} />
           </>}
         />
+        {notifications.error && <ScreenState title="Notificações indisponíveis" message={notifications.error}
+          actionLabel="Tentar novamente" onAction={() => void notifications.synchronise()} />}
+        {notifications.permission !== 'granted' && notifications.permission !== 'unsupported' && notifications.userId && (
+          <ScreenState title="Alertas de novos avistamentos"
+            message="O histórico funciona sem permissão. Ative os alertas para receber avisos no Android."
+            actionLabel="Ativar alertas" onAction={() => void notifications.synchronise(true)} />
+        )}
         <View style={styles.welcome}>
           <Image source={require('../../assets/menuImage.jpg')} style={styles.welcomeImage} contentFit="cover" />
           <View style={styles.welcomeText}>
@@ -196,8 +188,6 @@ const styles = StyleSheet.create({
   sectionTitle: { flex: 1, color: theme.colors.textPrimary, fontSize: theme.fonts.sizes.lg, fontWeight: '700' },
   seeAllButton: { minHeight: theme.touchTarget, minWidth: theme.touchTarget, justifyContent: 'center', paddingHorizontal: theme.spacing.sm },
   seeAll: { color: theme.colors.primary, fontSize: theme.fonts.sizes.sm, fontWeight: '600' },
-  notification: { padding: theme.spacing.md, gap: theme.spacing.sm, backgroundColor: theme.colors.surface, borderRadius: theme.radius.lg },
-  cardTitle: { fontSize: theme.fonts.sizes.md, fontWeight: '600', color: theme.colors.textPrimary },
   notifDot: { position: 'absolute', top: 2, right: 4, minWidth: 18, minHeight: 18, paddingHorizontal: 4, backgroundColor: theme.colors.danger, borderRadius: theme.radius.full, alignItems: 'center', justifyContent: 'center' },
   notifDotText: { color: theme.colors.textLight, fontSize: 10, fontWeight: '700' },
 });

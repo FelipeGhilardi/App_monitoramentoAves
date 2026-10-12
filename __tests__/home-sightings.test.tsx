@@ -6,6 +6,7 @@ import { getCurrentUser, logout, updateProfile, UserResponse } from '../services
 import appConfig from '../app.json';
 import { theme } from '../constants/theme';
 import { fetchSightings, SightingResponse } from '../services/sightings';
+import { NotificationProvider } from '../services/notification-context';
 
 jest.mock('expo-image', () => ({ Image: require('react-native').Image }));
 jest.mock('expo-router', () => ({ useRouter: jest.fn() }));
@@ -40,7 +41,7 @@ const renderHome = () => render(
     frame: { x: 0, y: 0, width: 360, height: 800 },
     insets: { top: 24, right: 0, bottom: 16, left: 0 },
   }}>
-    <HomeScreen />
+    <NotificationProvider><HomeScreen /></NotificationProvider>
   </SafeAreaProvider>
 );
 

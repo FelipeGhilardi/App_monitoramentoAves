@@ -1,5 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { apiFetch, clearToken, getToken, setToken, ApiError } from './api';
+import { beginNotificationLogout, deactivateNotificationDevice, endNotificationLogout, markDeviceDeactivationPending } from './notification-device';
+import { sessionChanged } from './session-events';
 
 export interface UserResponse {
   id: string;
@@ -58,6 +60,7 @@ export async function login(email: string, password: string): Promise<AuthResult
       await AsyncStorage.setItem(USER_EMAIL_KEY, email);
     }
 
+    sessionChanged();
     return { success: true };
   } catch (err) {
     const apiErr = err as ApiError;
@@ -66,6 +69,24 @@ export async function login(email: string, password: string): Promise<AuthResult
 }
 
 export async function logout(): Promise<void> {
+  beginNotificationLogout();
+  try {
+    const token = await getToken();
+    if (token && isJwtUnexpired(token)) await deactivateNotificationDevice(token);
+    else await markDeviceDeactivationPending();
+    await clearSession();
+  } finally { endNotificationLogout(); }
+}
+
+export async function expireSession(): Promise<void> {
+  beginNotificationLogout();
+  try {
+    await markDeviceDeactivationPending();
+    await clearSession();
+  } finally { endNotificationLogout(); }
+}
+
+async function clearSession(): Promise<void> {
   await clearToken();
   await AsyncStorage.multiRemove([
     USER_NAME_KEY,
@@ -73,6 +94,7 @@ export async function logout(): Promise<void> {
     USER_ID_KEY,
     USER_CREATED_AT_KEY,
   ]);
+  sessionChanged();
 }
 
 /**
@@ -127,7 +149,7 @@ export async function isLoggedIn(): Promise<boolean> {
   if (isJwtUnexpired(token)) return true;
 
   // Token presente mas expirado/inválido -> limpa para evitar tentativas autenticadas inúteis.
-  await logout();
+  await expireSession();
   return false;
 }
 

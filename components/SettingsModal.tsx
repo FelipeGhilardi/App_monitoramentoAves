@@ -1,10 +1,11 @@
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Linking, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import appConfig from '../app.json';
 import { theme } from '../constants/theme';
 import { UserResponse } from '../services/auth';
 import ScreenHeader from './ScreenHeader';
+import { useNotifications } from '../services/notification-context';
 
 interface Props {
   visible: boolean;
@@ -17,6 +18,7 @@ interface Props {
 }
 
 export default function SettingsModal({ visible, user, onClose, onEdit, onAbout, onLogout, loggingOut }: Props) {
+  const notifications = useNotifications();
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <SafeAreaView edges={['bottom']} style={styles.container}>
@@ -27,6 +29,29 @@ export default function SettingsModal({ visible, user, onClose, onEdit, onAbout,
             <View style={styles.account}>
               <Text style={styles.name}>{user?.name ?? 'Usuário'}</Text>
               <Text style={styles.secondary}>{user?.email ?? ''}</Text>
+            </View>
+            <Text style={styles.sectionTitle}>Notificações</Text>
+            <View style={styles.card}>
+              <View style={styles.row}>
+                <Text style={styles.rowText}>Push de novos avistamentos</Text>
+                <Switch accessibilityLabel="Push de novos avistamentos"
+                  disabled={notifications.busy || !notifications.preferences}
+                  value={notifications.preferences?.pushEnabled ?? false}
+                  onValueChange={(enabled) => void notifications.setPushEnabled(enabled)} />
+              </View>
+              <View style={styles.account}>
+                <Text style={styles.secondary}>O histórico continua ativo mesmo com push desligado.</Text>
+                <Text style={styles.secondary}>{notifications.permission === 'unsupported' ? 'Push disponível somente no Android.'
+                  : notifications.permission !== 'granted' ? 'Permissão do Android não concedida.'
+                  : notifications.registered ? 'Este dispositivo está registrado.' : 'Dispositivo ainda não registrado.'}</Text>
+                {notifications.error && <Text accessibilityRole="alert" style={styles.secondary}>{notifications.error}</Text>}
+                <Pressable accessibilityRole="button" style={styles.row}
+                  onPress={() => void notifications.synchronise(true)}><Text style={styles.rowText}>Sincronizar alertas</Text></Pressable>
+                {notifications.permission === 'denied' && <Pressable accessibilityRole="button" style={styles.row}
+                  onPress={() => { void Linking.openSettings().catch(notifications.reportError); }}>
+                  <Text style={styles.rowText}>Abrir configurações do Android</Text>
+                </Pressable>}
+              </View>
             </View>
             <Pressable accessibilityRole="button" style={({ pressed }) => [styles.row, pressed && styles.pressed]} onPress={onEdit}>
               <Ionicons name="person-outline" size={22} color={theme.colors.primary} />
