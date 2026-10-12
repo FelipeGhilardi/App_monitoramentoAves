@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "358363931513",
+    "project_id": "avistai-tcc",
+    "storage_bucket": "avistai-tcc.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:358363931513:android:1e53696cb17463f5f185a8",
+        "android_client_info": {
+          "package_name": "br.edu.maua.avistai"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCH_gv3C4Kc4jEUECvU4Q01HPGbkwh-ww8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
