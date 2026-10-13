@@ -31,7 +31,19 @@
     "plugins": [
       "expo-router",
       "expo-asset",
-      ["expo-notifications", { "defaultChannel": "sightings" }]
-    ]
+      [
+        "expo-notifications",
+        {
+          "defaultChannel": "sightings"
+        }
+      ],
+      "expo-font"
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "4cdab18f-536d-4c9d-b268-84709ca2bc76"
+      }
+    }
   }
 }
