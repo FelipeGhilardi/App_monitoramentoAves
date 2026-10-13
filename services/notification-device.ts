@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Platform } from 'react-native';
 import { randomUUID } from 'expo-crypto';
 import { apiFetch } from './api';
+import { nativeNotifications } from './notification-runtime';
 
 const INSTALLATION_KEY = 'notificationInstallationId';
 const OWNER_KEY = 'notificationDeviceOwner';
@@ -55,10 +55,8 @@ export async function deactivateNotificationDevice(sessionToken: string): Promis
     if (!await AsyncStorage.getItem(OWNER_KEY)) return;
     const id = await installationId();
     await apiFetch<void>(`/api/notification-devices/${id}`, { method: 'DELETE' }, sessionToken);
-    if (Platform.OS === 'android') {
-      const notifications = await import('expo-notifications');
-      await notifications.dismissAllNotificationsAsync();
-    }
+    const notifications = nativeNotifications();
+    if (notifications) await notifications.dismissAllNotificationsAsync();
     await AsyncStorage.multiRemove([OWNER_KEY, PENDING_KEY]);
   });
 }

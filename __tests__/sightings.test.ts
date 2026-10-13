@@ -1,6 +1,6 @@
 import { apiFetch } from '../services/api';
 import {
-  fetchSightingById, formatSightingDate, getSightingTitle, SightingResponse,
+  fetchSightingById, fetchSightingsPage, formatSightingDate, getSightingTitle, SightingResponse,
 } from '../services/sightings';
 
 jest.mock('../services/api', () => ({ apiFetch: jest.fn() }));
@@ -44,4 +44,23 @@ test('não faz requisição com ID vazio', async () => {
     success: false, status: 400, message: 'Avistamento inválido.',
   });
   expect(mockApiFetch).not.toHaveBeenCalled();
+});
+
+test('consulta uma página com filtros, ordenação e cursor', async () => {
+  const page = { items: [record], nextCursor: 'cursor/next', hasMore: true };
+  mockApiFetch.mockResolvedValueOnce(page);
+
+  expect(await fetchSightingsPage({
+    cursor: 'cursor/current',
+    date: '2026-09-20',
+    speciesId: 'species/1',
+    includeUnidentified: true,
+    sort: 'species_asc',
+    limit: 100,
+  })).toEqual({ success: true, data: page });
+
+  expect(mockApiFetch).toHaveBeenCalledWith(
+    '/api/sightings?limit=50&sort=species_asc&cursor=cursor%2Fcurrent&from=2026-09-20&to=2026-09-20&speciesId=species%2F1&includeUnidentified=true',
+    { method: 'GET' }
+  );
 });

@@ -41,7 +41,8 @@ export default function SettingsModal({ visible, user, onClose, onEdit, onAbout,
               </View>
               <View style={styles.account}>
                 <Text style={styles.secondary}>O histórico continua ativo mesmo com push desligado.</Text>
-                <Text style={styles.secondary}>{notifications.permission === 'unsupported' ? 'Push disponível somente no Android.'
+                <Text style={styles.secondary}>{notifications.permission === 'expo-go' ? 'Push exige uma build própria do app; não funciona no Expo Go.'
+                  : notifications.permission === 'unsupported' ? 'Push disponível somente no Android.'
                   : notifications.permission !== 'granted' ? 'Permissão do Android não concedida.'
                   : notifications.registered ? 'Este dispositivo está registrado.' : 'Dispositivo ainda não registrado.'}</Text>
                 {notifications.error && <Text accessibilityRole="alert" style={styles.secondary}>{notifications.error}</Text>}
