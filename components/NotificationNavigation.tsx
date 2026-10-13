@@ -1,25 +1,18 @@
 import { useEffect, useRef } from 'react';
-import { Platform } from 'react-native';
 import { useRootNavigationState, useRouter } from 'expo-router';
-import * as Notifications from 'expo-notifications';
+import type { NotificationResponse } from 'expo-notifications';
 import { useNotifications } from '../services/notification-context';
 import { notificationDestination } from '../services/notifications';
-
-if (Platform.OS === 'android') {
-  Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldPlaySound: true, shouldSetBadge: false, shouldShowBanner: true, shouldShowList: true,
-    }),
-  });
-}
+import { nativeNotifications } from '../services/notification-runtime';
 
 export default function NotificationNavigation() {
   const router = useRouter();
   const navigation = useRootNavigationState();
   const context = useNotifications();
+  const Notifications = nativeNotifications();
   const current = useRef(context);
   current.current = context;
-  const pending = useRef<Notifications.NotificationResponse | null>(null);
+  const pending = useRef<NotificationResponse | null>(null);
   const handled = useRef(new Set<string>());
   const running = useRef(false);
   const ready = useRef(false);
@@ -28,7 +21,7 @@ export default function NotificationNavigation() {
 
   process.current = async () => {
     const response = pending.current;
-    if (!response || !current.current.userId || !ready.current || running.current) return;
+    if (!Notifications || !response || !current.current.userId || !ready.current || running.current) return;
     const key = response.notification.request.identifier;
     if (handled.current.has(key)) { pending.current = null; return; }
     running.current = true;
@@ -50,9 +43,14 @@ export default function NotificationNavigation() {
   };
 
   useEffect(() => {
-    if (Platform.OS !== 'android') return;
+    if (!Notifications) return;
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldPlaySound: true, shouldSetBadge: false, shouldShowBanner: true, shouldShowList: true,
+      }),
+    });
     let alive = true;
-    const receive = (response: Notifications.NotificationResponse) => {
+    const receive = (response: NotificationResponse) => {
       if (!alive) return;
       pending.current = response;
       void process.current();
@@ -62,7 +60,7 @@ export default function NotificationNavigation() {
       .then((response) => { if (response) receive(response); })
       .catch((failure: unknown) => current.current.reportError(failure));
     return () => { alive = false; listener.remove(); };
-  }, []);
+  }, [Notifications]);
 
   useEffect(() => { void process.current(); }, [context.userId, navigation?.key]);
   return null;

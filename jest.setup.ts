@@ -10,6 +10,11 @@ jest.mock('expo-crypto', () => ({
   randomUUID: jest.fn(() => '11111111-1111-4111-8111-111111111111'),
 }));
 
+jest.mock('expo', () => ({
+  ...jest.requireActual('expo'),
+  isRunningInExpoGo: jest.fn(() => false),
+}));
+
 jest.mock('expo-notifications', () => ({
   AndroidImportance: { HIGH: 4 },
   PermissionStatus: { DENIED: 'denied', GRANTED: 'granted', UNDETERMINED: 'undetermined' },

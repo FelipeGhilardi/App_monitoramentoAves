@@ -1,9 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, ReactNode } from 'react';
-import { AppState, Platform } from 'react-native';
-import * as Notifications from 'expo-notifications';
+import { AppState } from 'react-native';
 import { getToken } from './api';
 import { expireSession, getCurrentUser, isLoggedIn } from './auth';
 import { deactivateNotificationDevice, registerNotificationDevice } from './notification-device';
+import { nativeNotifications, notificationSupport } from './notification-runtime';
 import { onSessionChange } from './session-events';
 import {
   fetchNotifications, fetchUnreadCount, NotificationItem, NotificationPage, NotificationPreferences,
@@ -85,8 +85,10 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       setUnreadCount(subscribed.unreadCount);
       setError(null);
       setRevision((value) => value + 1);
-      if (Platform.OS !== 'android') {
-        setPermission('unsupported');
+      const Notifications = nativeNotifications();
+      if (!Notifications) {
+        setPermission(notificationSupport());
+        setRegistered(false);
         return;
       }
       await Notifications.setNotificationChannelAsync('sightings', {
@@ -148,9 +150,9 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       setTimeout(run, 0);
     });
     const state = AppState.addEventListener('change', (value) => { if (value === 'active') run(); });
-    const received = Platform.OS === 'android'
-      ? Notifications.addNotificationReceivedListener(() => { void refresh().catch(reportError); }) : null;
-    const tokenChange = Platform.OS === 'android' ? Notifications.addPushTokenListener(run) : null;
+    const notifications = nativeNotifications();
+    const received = notifications?.addNotificationReceivedListener(() => { void refresh().catch(reportError); });
+    const tokenChange = notifications?.addPushTokenListener(run);
     run();
     return () => {
       mounted = false;

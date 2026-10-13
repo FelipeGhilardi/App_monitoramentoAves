@@ -12,9 +12,21 @@ estenda essa escala antes de adicionar cores ou tamanhos locais.
 - `ScreenHeader`, `IconButton`, `FormField` e `ScreenState` compartilham os padrões.
   Cabeçalhos aplicam o inset superior; não adicione uma segunda safe area superior.
   Modais e conteúdo aplicam o inset inferior quando necessário.
-- O modal "Todos os avistamentos" tem um `SafeAreaProvider` próprio dentro do
-  `Modal`, antes do `SafeAreaView`. No Android, essa janela tem uma árvore nativa
-  separada; o provider da tela principal não substitui o provider do modal.
+- **Ver tudo** na Home abre a rota `/sightings`; a Home preserva apenas os
+  cinco registros recentes. A página carrega resultados da API em páginas de
+  até 50, sem buscar o histórico inteiro no aparelho.
+- A página de avistamentos oferece dia exato (`AAAA-MM-DD`), espécie,
+  inclusão de avistamentos sem identificação e ordenação por data ou primeira
+  espécie. As classificações especiais **Outros** e a legada **Ave não
+  identificada** não aparecem no seletor; ficam excluídas por padrão e só são
+  incluídas pelo checkbox quando nenhuma espécie foi escolhida. Espécie
+  selecionada tem prioridade sobre o checkbox.
+- Os seletores da página usam `Modal` com `SafeAreaProvider` próprio antes do
+  `SafeAreaView`, pois no Android a janela tem uma árvore nativa separada.
+  Aplicar ou limpar filtros reinicia o cursor; “Carregar mais” só aparece
+  quando a API informar que há nova página. O botão de atualizar no cabeçalho
+  recarrega a primeira página preservando os filtros aplicados; a prévia da
+  Home também oferece atualizar ao lado de “Ver tudo”.
 - Layout é mobile-first com Flexbox. Imagens seguem o contêiner e gráficos medem
   sua área com `onLayout`. Não use a largura da janela capturada no carregamento.
 - 320, 360 e 412 são larguras lógicas de conferência, não breakpoints de aparelhos.
@@ -79,9 +91,39 @@ importa aquele passado. A chave de envio fica apenas na Lambda HTTP da API,
 nunca neste cliente nem no worker.
 Expo Go/Android SDK 54 não suporta essa validação: use build própria em aparelho
 com Google Play Services, por exemplo `npx expo run:android --device` em máquina
-com SDK/JDK Android configurados. O build release e recebimento real ainda
+com SDK/JDK Android configurados. No Expo Go, o histórico e a preferência da
+conta continuam disponíveis, mas o módulo nativo de notificações não é
+carregado: Configurações explica que push exige uma build própria. Não há
+pedido de permissão, cadastro de token ou listener de push nesse ambiente.
+O build release e recebimento real ainda
 exigem validação no aparelho. iOS/web mantêm histórico, sem cadastro de push.
 Não alterar o projeto Android gerado manualmente: configuração vem de app.json.
+
+### Reconstruir a build Android após alterar módulos nativos
+
+`expo-font` é uma dependência explícita compatível com o SDK 54 (`~14.0.11`).
+Sem isso, o peer de `@expo/vector-icons` pode resolver uma versão de outro SDK,
+causando `NoSuchMethodError` em `FontLoaderModule` com o core nativo do SDK 54.
+Não corrigir isso atualizando `expo-modules-core` isoladamente.
+
+Alterações nativas exigem um APK novo; Reload e cache do Metro não atualizam
+as bibliotecas já compiladas. Na cópia Windows com `package.json`,
+`package-lock.json` e `app.json` atualizados, pare o Metro anterior e execute
+na pasta do app (PowerShell):
+
+```powershell
+npm ci
+npx expo prebuild --platform android
+Push-Location android
+.\gradlew.bat clean
+Pop-Location
+npx expo run:android --device
+```
+
+O prebuild atualiza o projeto gerado sem `--clean`, preservando a pasta
+Android existente. Instale e abra o APK recém-compilado, não o Expo Go ou
+uma build antiga. Limpar o Gradle não exige desinstalar o app nem apagar
+dados do dispositivo.
 
 Os testes de componentes não comprovam layout nativo. A validação final deve
 incluir Android, barras por gestos/botões e permissões/serviços apenas quando

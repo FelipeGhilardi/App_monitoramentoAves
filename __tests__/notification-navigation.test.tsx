@@ -2,6 +2,7 @@ import { act, render, waitFor } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { useRouter, useRootNavigationState } from 'expo-router';
+import { isRunningInExpoGo } from 'expo';
 import * as Notifications from 'expo-notifications';
 import NotificationNavigation from '../components/NotificationNavigation';
 import { NotificationProvider } from '../services/notification-context';
@@ -29,6 +30,7 @@ beforeEach(async () => {
   await AsyncStorage.clear();
   jest.clearAllMocks();
   jest.replaceProperty(Platform, 'OS', 'android');
+  jest.mocked(isRunningInExpoGo).mockReturnValue(false);
   global.fetch = mockFetch;
   mockFetch.mockReset();
   mockFetch.mockImplementation(async (url: string) => {
@@ -51,6 +53,17 @@ beforeEach(async () => {
 });
 
 afterEach(() => { jest.restoreAllMocks(); global.fetch = originalFetch; });
+
+test('Expo Go não instala handler nem consulta respostas nativas de push', async () => {
+  jest.mocked(isRunningInExpoGo).mockReturnValue(true);
+  await login(user.email, 'synthetic-password');
+  await render(<NotificationProvider><NotificationNavigation /></NotificationProvider>);
+  await waitFor(() => expect(mockFetch.mock.calls.some(([url]) => url.endsWith('/notification-subscriptions'))).toBe(true));
+  expect(Notifications.setNotificationHandler).not.toHaveBeenCalled();
+  expect(Notifications.addNotificationResponseReceivedListener).not.toHaveBeenCalled();
+  expect(Notifications.getLastNotificationResponseAsync).not.toHaveBeenCalled();
+  expect(push).not.toHaveBeenCalled();
+});
 
 test('abertura fria consome o toque uma vez e não duplica a resposta do listener', async () => {
   await login(user.email, 'synthetic-password');

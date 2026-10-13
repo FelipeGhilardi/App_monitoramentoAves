@@ -31,7 +31,8 @@
     "plugins": [
       "expo-router",
       "expo-asset",
-      ["expo-notifications", { "defaultChannel": "sightings" }]
+      ["expo-notifications", { "defaultChannel": "sightings" }],
+      "expo-font"
     ]
   }
 }

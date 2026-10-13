@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, FlatList, Pressable, Modal } from 'react-native';
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { getCurrentUser, logout, UserResponse } from '../../services/auth';
@@ -16,28 +15,6 @@ import SightingCard from '../../components/SightingCard';
 import NotificationsModal from '../../components/NotificationsModal';
 import { useNotifications } from '../../services/notification-context';
 
-function AllSightingsModal({ visible, onClose, sightings, onSelect }: {
-  visible: boolean; onClose: () => void; sightings: SightingResponse[]; onSelect: (id: string) => void;
-}) {
-  return (
-    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <SafeAreaProvider testID="all-sightings-safe-area" style={styles.container}>
-        <SafeAreaView edges={['bottom']} style={styles.container}>
-          <ScreenHeader title="Todos os avistamentos" onBack={onClose} />
-          <FlatList
-            data={sightings}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={styles.section}
-            renderItem={({ item }) => <SightingCard sighting={item} onPress={() => onSelect(item.id)} />}
-            ListEmptyComponent={<ScreenState title="Nenhum avistamento ainda" message="Quando houver registros, eles aparecerão aqui." />}
-            showsVerticalScrollIndicator={false}
-          />
-        </SafeAreaView>
-      </SafeAreaProvider>
-    </Modal>
-  );
-}
-
 export default function HomeScreen() {
   const router = useRouter();
   const notifications = useNotifications();
@@ -45,9 +22,9 @@ export default function HomeScreen() {
   const [showProfile, setShowProfile] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [showAllSightings, setShowAllSightings] = useState(false);
   const [sightings, setSightings] = useState<SightingResponse[]>([]);
   const [loadingSightings, setLoadingSightings] = useState(true);
+  const [refreshingSightings, setRefreshingSightings] = useState(false);
   const [sightingsError, setSightingsError] = useState<string | null>(null);
   const [user, setUser] = useState<UserResponse | null>(null);
   const [accountError, setAccountError] = useState('');
@@ -64,8 +41,9 @@ export default function HomeScreen() {
     }
   }, []);
 
-  const loadSightings = useCallback(async () => {
-    setLoadingSightings(true);
+  const loadSightings = useCallback(async (refresh = false) => {
+    if (refresh) setRefreshingSightings(true);
+    else setLoadingSightings(true);
     const result = await fetchSightings();
     if (result.success && result.data) {
       setSightings(result.data);
@@ -74,7 +52,8 @@ export default function HomeScreen() {
       setSightings([]);
       setSightingsError(result.message ?? 'Erro ao carregar avistamentos.');
     }
-    setLoadingSightings(false);
+    if (refresh) setRefreshingSightings(false);
+    else setLoadingSightings(false);
   }, []);
 
   useEffect(() => {
@@ -108,7 +87,6 @@ export default function HomeScreen() {
   };
 
   const openSighting = (id: string) => {
-    setShowAllSightings(false);
     router.push({ pathname: '/sightings/[id]', params: { id } });
   };
 
@@ -145,11 +123,20 @@ export default function HomeScreen() {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text accessibilityRole="header" style={styles.sectionTitle}>Últimos avistamentos</Text>
-            {sightings.length > 0 && (
-              <Pressable accessibilityRole="button" style={styles.seeAllButton} onPress={() => setShowAllSightings(true)}>
-                <Text style={styles.seeAll}>Ver tudo</Text>
-              </Pressable>
-            )}
+            <View style={styles.sectionActions}>
+              <IconButton
+                icon="refresh"
+                label="Atualizar avistamentos"
+                onPress={() => void loadSightings(true)}
+                disabled={loadingSightings}
+                loading={refreshingSightings}
+              />
+              {sightings.length > 0 && (
+                <Pressable accessibilityRole="button" style={styles.seeAllButton} onPress={() => router.push('/sightings')}>
+                  <Text style={styles.seeAll}>Ver tudo</Text>
+                </Pressable>
+              )}
+            </View>
           </View>
           {loadingSightings ? <ScreenState loading title="Carregando avistamentos..." /> : sightingsError ? (
             <ScreenState title="Não foi possível carregar" message={sightingsError} icon="cloud-offline-outline" actionLabel="Tentar novamente" onAction={loadSightings} />
@@ -169,7 +156,6 @@ export default function HomeScreen() {
         onAbout={() => { setShowSettings(false); router.navigate('/(tabs)/camera'); }}
         onLogout={handleLogout} loggingOut={loggingOut}
       />
-      <AllSightingsModal visible={showAllSightings} onClose={() => setShowAllSightings(false)} sightings={sightings} onSelect={openSighting} />
       <AppAlert visible={Boolean(accountError)} title="Erro na conta" message={accountError} onClose={() => setAccountError('')} />
     </View>
   );
@@ -186,6 +172,7 @@ const styles = StyleSheet.create({
   section: { padding: theme.spacing.md, gap: theme.spacing.md },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm },
   sectionTitle: { flex: 1, color: theme.colors.textPrimary, fontSize: theme.fonts.sizes.lg, fontWeight: '700' },
+  sectionActions: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs },
   seeAllButton: { minHeight: theme.touchTarget, minWidth: theme.touchTarget, justifyContent: 'center', paddingHorizontal: theme.spacing.sm },
   seeAll: { color: theme.colors.primary, fontSize: theme.fonts.sizes.sm, fontWeight: '600' },
   notifDot: { position: 'absolute', top: 2, right: 4, minWidth: 18, minHeight: 18, paddingHorizontal: 4, backgroundColor: theme.colors.danger, borderRadius: theme.radius.full, alignItems: 'center', justifyContent: 'center' },
