@@ -20,7 +20,9 @@ estenda essa escala antes de adicionar cores ou tamanhos locais.
   espécie. As classificações especiais **Outros** e a legada **Ave não
   identificada** não aparecem no seletor; ficam excluídas por padrão e só são
   incluídas pelo checkbox quando nenhuma espécie foi escolhida. Espécie
-  selecionada tem prioridade sobre o checkbox.
+  selecionada tem prioridade sobre o checkbox. Os controles ficam recolhidos
+  inicialmente no botão **Filtros**, que informa seu estado expandido para
+  tecnologias assistivas.
 - Os seletores da página usam `Modal` com `SafeAreaProvider` próprio antes do
   `SafeAreaView`, pois no Android a janela tem uma árvore nativa separada.
   Aplicar ou limpar filtros reinicia o cursor; “Carregar mais” só aparece
@@ -32,7 +34,8 @@ estenda essa escala antes de adicionar cores ou tamanhos locais.
 - 320, 360 e 412 são larguras lógicas de conferência, não breakpoints de aparelhos.
   Teste fonte em 200%, teclado aberto, nomes longos, erros e conteúdo vazio.
 - Coleção continua sendo o catálogo da API; não implica favoritos ou descoberta
-  pessoal. Cards podem expandir descrição e dicas, sem outra rota.
+  pessoal. As classificações sem identificação não fazem parte do catálogo
+  exibido. Cards podem expandir descrição e dicas, sem outra rota.
   A busca tem altura própria no cabeçalho, sem `flex: 1` no eixo vertical; o
   campo deve encolher horizontalmente para acomodar a ação de limpar.
   Fotos disponíveis abrem ao toque no mesmo visualizador dos avistamentos, com
@@ -45,6 +48,19 @@ estenda essa escala antes de adicionar cores ou tamanhos locais.
   após 500 ms. Um 404 persistente oferece nova tentativa sem recarregar o app;
   respostas 400 continuam sendo erros de consulta, não prova de inexistência.
   A confirmação pendente é cancelada ao sair ou trocar de registro.
+- Avistamentos usam `imageUrls` na ordem recebida da API, com até quatro fotos
+  reais por registro. A ausência do campo usa a foto legada `imageUrl`; uma
+  lista explicitamente vazia ignora capas legadas. Cards mostram a primeira
+  foto real e indicam múltiplas fotos; sem fotos reais, preservam a ilustração
+  da espécie como capa, sem contá-la como parte da galeria.
+- O detalhe oferece carrossel com **Foto anterior**, **Próxima foto** e
+  contador (por exemplo, **2 de 4**), sem avançar além das extremidades.
+  Deslizar horizontalmente sobre a foto também navega; movimentos verticais
+  continuam disponíveis para rolar o detalhe. Carregamento, erro e tentativa
+  são independentes por URL, e uma foto com erro não bloqueia as outras.
+  Somente a foto selecionada e carregada abre o `SightingImageViewer`.
+  Fechar mantém a seleção; trocar de rota reinicia a seleção, os estados de
+  carregamento e o zoom. Sem fotos reais, o detalhe não amplia a ilustração.
 - Estatísticas preservam os cálculos existentes e oferecem 7, 30 e 90 dias,
   iniciando em 7. Os valores dos gráficos também ficam disponíveis como texto.
 - Configurações reusa conta, edição e logout; Sobre permanece na quarta aba.
@@ -55,6 +71,9 @@ estenda essa escala antes de adicionar cores ou tamanhos locais.
   usam `ScreenState`. Atualizações ocorrem por retomada, push e abertura da caixa,
   sem polling contínuo. Falhas não são tratadas como confirmação de leitura.
   O modal de notificações também usa seu próprio `SafeAreaProvider`.
+- **Limpar notificações** exige confirmação e esvazia somente a caixa da
+  conta atual; não desativa novos avisos nem remove pushes já entregues ao
+  Android.
 
 ## Push Android
 

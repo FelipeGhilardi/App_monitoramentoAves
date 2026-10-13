@@ -93,6 +93,7 @@ export default function SightingsScreen() {
   const [error, setError] = useState<string | null>(null);
   const [dateError, setDateError] = useState<string | null>(null);
   const [choice, setChoice] = useState<'species' | 'sort' | null>(null);
+  const [filtersExpanded, setFiltersExpanded] = useState(false);
 
   const loadSpecies = useCallback(async () => {
     const result = await fetchSpecies();
@@ -208,69 +209,82 @@ export default function SightingsScreen() {
         contentContainerStyle={styles.list}
         ListHeaderComponent={
           <View style={styles.filters}>
-            <Text style={styles.filterTitle}>Filtros</Text>
-            <TextInput
-              accessibilityLabel="Filtrar por dia"
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="numbers-and-punctuation"
-              maxLength={10}
-              placeholder="Dia (AAAA-MM-DD)"
-              placeholderTextColor={theme.colors.textSecondary}
-              value={date}
-              onChangeText={setDate}
-              style={[styles.dateInput, dateError && styles.inputError]}
-            />
-            {dateError && <Text accessibilityRole="alert" style={styles.errorText}>{dateError}</Text>}
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Filtrar por espécie"
-              onPress={() => setChoice('species')}
-              style={({ pressed }) => [styles.select, pressed && styles.pressed]}
+              accessibilityLabel={filtersExpanded ? 'Ocultar filtros' : 'Mostrar filtros'}
+              accessibilityState={{ expanded: filtersExpanded }}
+              onPress={() => setFiltersExpanded((expanded) => !expanded)}
+              style={({ pressed }) => [styles.filterToggle, pressed && styles.pressed]}
             >
-              <Text style={styles.selectLabel}>Espécie</Text>
-              <Text style={styles.selectValue}>{selectedSpecies?.name ?? 'Todas as espécies'}</Text>
-              <Ionicons name="chevron-down" size={20} color={theme.colors.textSecondary} />
+              <Text style={styles.filterTitle}>Filtros</Text>
+              <Ionicons name={filtersExpanded ? 'chevron-up' : 'chevron-down'} size={22} color={theme.colors.primary} />
             </Pressable>
-            {speciesError && (
-              <View style={styles.speciesError}>
-                <Text style={styles.errorText}>{speciesError}</Text>
-                <Pressable accessibilityRole="button" onPress={() => void loadSpecies()}>
-                  <Text style={styles.retryText}>Tentar novamente</Text>
+            {filtersExpanded && (
+              <View style={styles.filterContent}>
+                <TextInput
+                  accessibilityLabel="Filtrar por dia"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="numbers-and-punctuation"
+                  maxLength={10}
+                  placeholder="Dia (AAAA-MM-DD)"
+                  placeholderTextColor={theme.colors.textSecondary}
+                  value={date}
+                  onChangeText={setDate}
+                  style={[styles.dateInput, dateError && styles.inputError]}
+                />
+                {dateError && <Text accessibilityRole="alert" style={styles.errorText}>{dateError}</Text>}
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Filtrar por espécie"
+                  onPress={() => setChoice('species')}
+                  style={({ pressed }) => [styles.select, pressed && styles.pressed]}
+                >
+                  <Text style={styles.selectLabel}>Espécie</Text>
+                  <Text style={styles.selectValue}>{selectedSpecies?.name ?? 'Todas as espécies'}</Text>
+                  <Ionicons name="chevron-down" size={20} color={theme.colors.textSecondary} />
                 </Pressable>
+                {speciesError && (
+                  <View style={styles.speciesError}>
+                    <Text style={styles.errorText}>{speciesError}</Text>
+                    <Pressable accessibilityRole="button" onPress={() => void loadSpecies()}>
+                      <Text style={styles.retryText}>Tentar novamente</Text>
+                    </Pressable>
+                  </View>
+                )}
+                <View style={styles.switchRow}>
+                  <View style={styles.switchText}>
+                    <Text style={styles.selectLabel}>Incluir avistamentos sem identificação</Text>
+                    {selectedSpeciesId && <Text style={styles.hint}>A espécie selecionada tem prioridade.</Text>}
+                  </View>
+                  <Switch
+                    accessibilityLabel="Incluir avistamentos sem identificação"
+                    accessibilityState={{ disabled: Boolean(selectedSpeciesId) }}
+                    disabled={Boolean(selectedSpeciesId)}
+                    value={includeUnidentified}
+                    onValueChange={setIncludeUnidentified}
+                  />
+                </View>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Organizar avistamentos"
+                  onPress={() => setChoice('sort')}
+                  style={({ pressed }) => [styles.select, pressed && styles.pressed]}
+                >
+                  <Text style={styles.selectLabel}>Organizar por</Text>
+                  <Text style={styles.selectValue}>{selectedSort}</Text>
+                  <Ionicons name="chevron-down" size={20} color={theme.colors.textSecondary} />
+                </Pressable>
+                <View style={styles.filterActions}>
+                  <Pressable accessibilityRole="button" onPress={applyFilters} style={({ pressed }) => [styles.applyButton, pressed && styles.pressed]}>
+                    <Text style={styles.applyText}>Aplicar filtros</Text>
+                  </Pressable>
+                  <Pressable accessibilityRole="button" onPress={clearFilters} style={({ pressed }) => [styles.clearButton, pressed && styles.pressed]}>
+                    <Text style={styles.clearText}>Limpar</Text>
+                  </Pressable>
+                </View>
               </View>
             )}
-            <View style={styles.switchRow}>
-              <View style={styles.switchText}>
-                <Text style={styles.selectLabel}>Incluir avistamentos sem identificação</Text>
-                {selectedSpeciesId && <Text style={styles.hint}>A espécie selecionada tem prioridade.</Text>}
-              </View>
-              <Switch
-                accessibilityLabel="Incluir avistamentos sem identificação"
-                accessibilityState={{ disabled: Boolean(selectedSpeciesId) }}
-                disabled={Boolean(selectedSpeciesId)}
-                value={includeUnidentified}
-                onValueChange={setIncludeUnidentified}
-              />
-            </View>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Organizar avistamentos"
-              onPress={() => setChoice('sort')}
-              style={({ pressed }) => [styles.select, pressed && styles.pressed]}
-            >
-              <Text style={styles.selectLabel}>Organizar por</Text>
-              <Text style={styles.selectValue}>{selectedSort}</Text>
-              <Ionicons name="chevron-down" size={20} color={theme.colors.textSecondary} />
-            </Pressable>
-            <View style={styles.filterActions}>
-              <Pressable accessibilityRole="button" onPress={applyFilters} style={({ pressed }) => [styles.applyButton, pressed && styles.pressed]}>
-                <Text style={styles.applyText}>Aplicar filtros</Text>
-              </Pressable>
-              <Pressable accessibilityRole="button" onPress={clearFilters} style={({ pressed }) => [styles.clearButton, pressed && styles.pressed]}>
-                <Text style={styles.clearText}>Limpar</Text>
-              </Pressable>
-            </View>
           </View>
         }
         ListEmptyComponent={loading ? (
@@ -326,7 +340,9 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.colors.background },
   list: { padding: theme.spacing.md, gap: theme.spacing.md, paddingBottom: theme.spacing.lg, flexGrow: 1 },
   filters: { backgroundColor: theme.colors.surface, borderRadius: theme.radius.lg, padding: theme.spacing.md, gap: theme.spacing.sm },
-  filterTitle: { fontSize: theme.fonts.sizes.lg, fontWeight: '700', color: theme.colors.textPrimary, marginBottom: theme.spacing.xs },
+  filterToggle: { minHeight: theme.touchTarget, flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm },
+  filterTitle: { flex: 1, fontSize: theme.fonts.sizes.lg, fontWeight: '700', color: theme.colors.textPrimary },
+  filterContent: { gap: theme.spacing.sm },
   dateInput: { minHeight: theme.touchTarget, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radius.md, color: theme.colors.textPrimary, fontSize: theme.fonts.sizes.md, paddingHorizontal: 12 },
   inputError: { borderColor: theme.colors.danger },
   select: { minHeight: theme.touchTarget, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radius.md, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm },

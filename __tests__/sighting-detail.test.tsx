@@ -11,16 +11,30 @@ jest.mock('../services/sightings', () => ({
   ...jest.requireActual('../services/sightings'),
   fetchSightingById: jest.fn(),
 }));
-jest.mock('../components/SightingImageViewer', () => {
-  const { Pressable, Text } = require('react-native');
+jest.mock('react-native-gesture-handler', () => {
   const React = require('react');
+  const { View } = require('react-native');
+  const gesture = () => ({
+    enabled() { return this; },
+    maxPointers() { return this; },
+    onStart() { return this; },
+    onUpdate() { return this; },
+    onEnd() { return this; },
+  });
   return {
-    __esModule: true,
-    default: ({ onClose }: { onClose: () => void }) =>
-      React.createElement(Pressable, { onPress: onClose, accessibilityLabel: 'Fechar imagem' },
-        React.createElement(Text, null, 'Visualizador aberto')),
+    Gesture: { Pinch: gesture, Pan: gesture, Simultaneous: jest.fn() },
+    GestureDetector: ({ children }: { children: React.ReactNode }) => React.createElement(View, null, children),
+    GestureHandlerRootView: View,
   };
 });
+jest.mock('react-native-reanimated', () => ({
+  __esModule: true,
+  default: { View: require('react-native').View },
+  useSharedValue: (value: number) => ({ value }),
+  useAnimatedStyle: () => ({}),
+  withTiming: (value: number) => value,
+  runOnJS: (fn: (...args: number[]) => void) => fn,
+}));
 
 const record: SightingResponse = {
   id: 'record-6',
@@ -33,6 +47,7 @@ const record: SightingResponse = {
   imageUrl: 'https://example.test/record-6.jpg',
   createdAt: '', updatedAt: '',
 };
+const gallery = Array.from({ length: 4 }, (_, index) => `https://example.test/photo-${index + 1}.jpg`);
 const mockFetch = jest.mocked(fetchSightingById);
 const mockLogin = jest.mocked(isLoggedIn);
 const mockParams = jest.mocked(useLocalSearchParams);
@@ -63,9 +78,9 @@ test('busca pelo ID da rota e abre somente a foto real depois de carregar', asyn
   expect(open.props.accessibilityState?.disabled ?? open.props.disabled).toBe(true);
   await fireEvent(screen.getByTestId('sighting-photo'), 'load');
   await fireEvent.press(open);
-  expect(screen.getByText('Visualizador aberto')).toBeTruthy();
+  expect(screen.getByTestId('full-screen-photo').props.source).toEqual({ uri: record.imageUrl });
   await fireEvent.press(screen.getByLabelText('Fechar imagem'));
-  expect(screen.queryByText('Visualizador aberto')).toBeNull();
+  expect(screen.queryByTestId('full-screen-photo')).toBeNull();
 });
 
 test('sem imagem do registro exibe placeholder mesmo com imagem da espécie', async () => {
@@ -85,6 +100,158 @@ test('falha de imagem mostra erro e ação para tentar novamente', async () => {
   expect(screen.queryByLabelText('Ampliar foto do avistamento')).toBeNull();
   await fireEvent.press(screen.getByText('Tentar novamente'));
   expect(screen.getByLabelText('Ampliar foto do avistamento')).toBeTruthy();
+});
+
+test('galeria vazia ignora capa legada e imagem ilustrativa da espécie', async () => {
+  mockFetch.mockResolvedValueOnce({ success: true, data: { ...record, imageUrls: [] } });
+  const screen = await render(<SightingDetailScreen />);
+  expect(screen.getByText('Sem imagem do registro')).toBeTruthy();
+  expect(screen.queryByTestId('sighting-photo')).toBeNull();
+  expect(screen.queryByLabelText('Próxima foto')).toBeNull();
+});
+
+test('uma foto real usa a galeria, informa 1 de 1 e não oferece navegação vazia', async () => {
+  mockFetch.mockResolvedValueOnce({ success: true, data: { ...record, imageUrls: [gallery[0]] } });
+  const screen = await render(<SightingDetailScreen />);
+  expect(screen.getByTestId('sighting-photo').props.source).toEqual({ uri: gallery[0] });
+  expect(screen.getByText('1 de 1')).toBeTruthy();
+  expect(screen.queryByLabelText('Foto anterior')).toBeNull();
+  expect(screen.queryByLabelText('Próxima foto')).toBeNull();
+});
+
+test('navega quatro fotos em ordem e amplia a selecionada usando o visualizador real', async () => {
+  mockFetch.mockResolvedValueOnce({ success: true, data: { ...record, imageUrls: gallery } });
+  const screen = await render(<SightingDetailScreen />);
+  expect(screen.getByText('1 de 4')).toBeTruthy();
+  expect(screen.getByLabelText('Foto anterior').props.accessibilityState.disabled).toBe(true);
+  await fireEvent.press(screen.getByLabelText('Próxima foto'));
+  expect(screen.getByText('2 de 4')).toBeTruthy();
+  expect(screen.getByTestId('sighting-photo').props.source).toEqual({ uri: gallery[1] });
+  expect(screen.getByLabelText('Ampliar foto do avistamento').props.accessibilityState.disabled).toBe(true);
+  await fireEvent(screen.getByTestId('sighting-photo'), 'load');
+  await fireEvent.press(screen.getByLabelText('Ampliar foto do avistamento'));
+  expect(screen.getByTestId('full-screen-photo').props.source).toEqual({ uri: gallery[1] });
+  expect(screen.getByLabelText('Foto 2 de 4 do avistamento ampliada')).toBeTruthy();
+  await fireEvent(screen.getByTestId('viewer-viewport'), 'layout', {
+    nativeEvent: { layout: { width: 400, height: 800 } },
+  });
+  await fireEvent(screen.getByTestId('full-screen-photo'), 'load', {
+    source: { width: 1200, height: 800 },
+  });
+  await fireEvent.press(screen.getByLabelText('Aumentar zoom'));
+  expect(screen.getByText('1.5×')).toBeTruthy();
+  await fireEvent.press(screen.getByLabelText('Fechar imagem'));
+  expect(screen.getByText('2 de 4')).toBeTruthy();
+  await fireEvent.press(screen.getByLabelText('Próxima foto'));
+  await fireEvent.press(screen.getByLabelText('Próxima foto'));
+  expect(screen.getByText('4 de 4')).toBeTruthy();
+  expect(screen.getByTestId('sighting-photo').props.source).toEqual({ uri: gallery[3] });
+  expect(screen.getByLabelText('Próxima foto').props.accessibilityState.disabled).toBe(true);
+  await fireEvent.press(screen.getByLabelText('Próxima foto'));
+  expect(screen.getByText('4 de 4')).toBeTruthy();
+});
+
+test('falhas, carregamento e repetição são independentes para cada URI', async () => {
+  mockFetch.mockResolvedValueOnce({ success: true, data: { ...record, imageUrls: gallery } });
+  const screen = await render(<SightingDetailScreen />);
+  const firstError = screen.getByTestId('sighting-photo').props.onError;
+  await fireEvent.press(screen.getByLabelText('Próxima foto'));
+  await fireEvent(screen.getByTestId('sighting-photo'), 'load');
+  await act(async () => { firstError(); });
+  expect(screen.getByLabelText('Ampliar foto do avistamento').props.accessibilityState.disabled).toBe(false);
+  await fireEvent.press(screen.getByLabelText('Próxima foto'));
+  expect(screen.getByLabelText('Ampliar foto do avistamento').props.accessibilityState.disabled).toBe(true);
+  await fireEvent.press(screen.getByLabelText('Foto anterior'));
+  expect(screen.getByLabelText('Ampliar foto do avistamento').props.accessibilityState.disabled).toBe(false);
+  await fireEvent.press(screen.getByLabelText('Foto anterior'));
+  expect(screen.getByText('Não foi possível carregar a imagem do registro.')).toBeTruthy();
+  expect(screen.getByText('1 de 4')).toBeTruthy();
+  await fireEvent.press(screen.getByLabelText('Tentar novamente foto 1'));
+  expect(screen.getByTestId('sighting-photo').props.source).toEqual({ uri: gallery[0] });
+  expect(screen.getByLabelText('Ampliar foto do avistamento').props.accessibilityState.disabled).toBe(true);
+  await act(async () => { firstError(); });
+  expect(screen.queryByText('Não foi possível carregar a imagem do registro.')).toBeNull();
+  await fireEvent(screen.getByTestId('sighting-photo'), 'load');
+  await fireEvent.press(screen.getByLabelText('Próxima foto'));
+  expect(screen.getByLabelText('Ampliar foto do avistamento').props.accessibilityState.disabled).toBe(false);
+});
+
+test('gesto horizontal navega sem capturar movimentos verticais e respeita os limites', async () => {
+  mockFetch.mockResolvedValueOnce({ success: true, data: { ...record, imageUrls: gallery } });
+  const screen = await render(<SightingDetailScreen />);
+  const gesture = async (dx: number, dy: number) => {
+    const area = screen.getByTestId('sighting-gallery');
+    const touch = (x: number, y: number, previousX: number, previousY: number, timestamp: number) => ({
+      nativeEvent: { touches: [{ identifier: 0, pageX: x, pageY: y }] },
+      touchHistory: {
+        numberActiveTouches: 1, indexOfSingleActiveTouch: 0, mostRecentTimeStamp: timestamp,
+        touchBank: [{
+          touchActive: true, currentPageX: x, currentPageY: y, currentTimeStamp: timestamp,
+          previousPageX: previousX, previousPageY: previousY,
+        }],
+      },
+    });
+    const start = touch(200, 200, 200, 200, 1);
+    const threshold = touch(200 + dx / 4, 200 + dy / 4, 200, 200, 2);
+    const end = touch(200 + dx, 200 + dy, 200 + dx / 4, 200 + dy / 4, 3);
+    let claimed = false;
+    await act(async () => {
+      area.props.onStartShouldSetResponderCapture(start);
+      area.props.onMoveShouldSetResponderCapture(threshold);
+      claimed = area.props.onMoveShouldSetResponder(threshold);
+      if (claimed) {
+        area.props.onResponderGrant(threshold);
+        area.props.onResponderMove(end);
+        area.props.onResponderRelease(end);
+      }
+    });
+    return claimed;
+  };
+
+  expect(await gesture(0, 80)).toBe(false);
+  expect(screen.getByText('1 de 4')).toBeTruthy();
+  expect(await gesture(-80, 4)).toBe(true);
+  expect(screen.getByText('2 de 4')).toBeTruthy();
+  expect(await gesture(80, 4)).toBe(true);
+  expect(screen.getByText('1 de 4')).toBeTruthy();
+  await gesture(80, 4);
+  expect(screen.getByText('1 de 4')).toBeTruthy();
+});
+
+test('trocar a rota fecha o zoom e reinicia seleção e estados de foto, mesmo com URIs iguais', async () => {
+  mockFetch.mockResolvedValue({ success: true, data: { ...record, imageUrls: gallery } });
+  const screen = await render(<SightingDetailScreen />);
+  await fireEvent.press(screen.getByLabelText('Próxima foto'));
+  const previousLoad = screen.getByTestId('sighting-photo').props.onLoad;
+  await fireEvent(screen.getByTestId('sighting-photo'), 'load');
+  await fireEvent.press(screen.getByLabelText('Ampliar foto do avistamento'));
+  await fireEvent(screen.getByTestId('viewer-viewport'), 'layout', {
+    nativeEvent: { layout: { width: 400, height: 800 } },
+  });
+  await fireEvent(screen.getByTestId('full-screen-photo'), 'load', {
+    source: { width: 1200, height: 800 },
+  });
+  await fireEvent.press(screen.getByLabelText('Aumentar zoom'));
+  expect(screen.getByText('1.5×')).toBeTruthy();
+
+  mockParams.mockReturnValue({ id: 'record-7' });
+  mockFetch.mockResolvedValueOnce({ success: true, data: { ...record, id: 'record-7', imageUrls: gallery } });
+  await screen.rerender(<SightingDetailScreen />);
+  expect(screen.getByText('1 de 4')).toBeTruthy();
+  expect(screen.queryByTestId('full-screen-photo')).toBeNull();
+  await fireEvent.press(screen.getByLabelText('Próxima foto'));
+  expect(screen.getByLabelText('Ampliar foto do avistamento').props.accessibilityState.disabled).toBe(true);
+  await act(async () => { previousLoad(); });
+  expect(screen.getByLabelText('Ampliar foto do avistamento').props.accessibilityState.disabled).toBe(true);
+  await fireEvent(screen.getByTestId('sighting-photo'), 'load');
+  await fireEvent.press(screen.getByLabelText('Ampliar foto do avistamento'));
+  await fireEvent(screen.getByTestId('viewer-viewport'), 'layout', {
+    nativeEvent: { layout: { width: 400, height: 800 } },
+  });
+  await fireEvent(screen.getByTestId('full-screen-photo'), 'load', {
+    source: { width: 1200, height: 800 },
+  });
+  expect(screen.getByText('1.0×')).toBeTruthy();
 });
 
 test.each([
