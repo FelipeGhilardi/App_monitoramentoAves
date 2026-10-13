@@ -6,7 +6,7 @@ import { deactivateNotificationDevice, registerNotificationDevice } from './noti
 import { nativeNotifications, notificationSupport } from './notification-runtime';
 import { onSessionChange } from './session-events';
 import {
-  fetchNotifications, fetchUnreadCount, NotificationItem, NotificationPage, NotificationPreferences,
+  clearNotifications, fetchNotifications, fetchUnreadCount, NotificationItem, NotificationPage, NotificationPreferences,
   notificationError, readNotification, saveNotificationPreference, subscribeNotifications,
 } from './notifications';
 
@@ -19,11 +19,13 @@ interface NotificationContextValue {
   busy: boolean;
   error: string | null;
   revision: number;
+  sessionRevision: number;
   synchronise: (requestPermission?: boolean) => Promise<void>;
   setPushEnabled: (enabled: boolean) => Promise<void>;
   refresh: () => Promise<void>;
   list: (cursor?: string | null) => Promise<NotificationPage>;
   read: (id: string) => Promise<NotificationItem>;
+  clear: (idempotencyKey: string) => Promise<void>;
   reportError: (error: unknown) => void;
 }
 
@@ -38,7 +40,10 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [revision, setRevision] = useState(0);
+  const [sessionRevision, setSessionRevision] = useState(0);
   const epoch = useRef(0);
+  const inboxEpoch = useRef(0);
+  const clearing = useRef(false);
   const session = useRef<{ token: string; userId: string } | null>(null);
   const syncing = useRef(false);
   const resync = useRef(false);
@@ -50,9 +55,18 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback(async () => {
     const current = session.current;
     const version = epoch.current;
-    if (!current) return;
-    const result = await fetchUnreadCount(current.token);
-    if (epoch.current === version && session.current === current) {
+    const inboxVersion = inboxEpoch.current;
+    if (!current || clearing.current) return;
+    let result: { unreadCount: number };
+    try {
+      result = await fetchUnreadCount(current.token);
+    } catch (failure) {
+      if (epoch.current !== version || session.current !== current
+          || inboxEpoch.current !== inboxVersion || clearing.current) return;
+      throw failure;
+    }
+    if (epoch.current === version && session.current === current
+        && inboxEpoch.current === inboxVersion && !clearing.current) {
       setUnreadCount(result.unreadCount);
       setRevision((value) => value + 1);
     }
@@ -67,6 +81,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     }
     syncing.current = true;
     const version = epoch.current;
+    const inboxVersion = inboxEpoch.current;
     setBusy(true);
     try {
       const token = await getToken();
@@ -81,10 +96,12 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       setUserId(user.id);
       const subscribed = await subscribeNotifications(token);
       if (version !== epoch.current) return;
-      setPreferences(subscribed);
-      setUnreadCount(subscribed.unreadCount);
-      setError(null);
-      setRevision((value) => value + 1);
+      if (inboxVersion === inboxEpoch.current && !clearing.current) {
+        setPreferences(subscribed);
+        setUnreadCount(subscribed.unreadCount);
+        setError(null);
+        setRevision((value) => value + 1);
+      }
       const Notifications = nativeNotifications();
       if (!Notifications) {
         setPermission(notificationSupport());
@@ -137,6 +154,9 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     const run = () => { if (mounted) void synchronise(false); };
     const off = onSessionChange(() => {
       epoch.current++;
+      setSessionRevision((value) => value + 1);
+      inboxEpoch.current++;
+      clearing.current = false;
       session.current = null;
       pendingPermissionRequest.current = false;
       setUserId(null);
@@ -173,25 +193,59 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
   const list = async (cursor?: string | null) => {
     const current = requireSession();
+    const version = inboxEpoch.current;
+    if (clearing.current) throw new Error('Limpeza de notificações em andamento.');
     const page = await fetchNotifications(current.token, cursor);
-    if (session.current !== current) throw new Error('A conta mudou durante a consulta.');
+    if (session.current !== current || version !== inboxEpoch.current) throw new Error('A caixa mudou durante a consulta.');
     return page;
   };
 
   const read = async (id: string) => {
     const current = requireSession();
+    const version = inboxEpoch.current;
+    if (clearing.current) throw new Error('Limpeza de notificações em andamento.');
     const item = await readNotification(current.token, id);
-    if (session.current !== current) throw new Error('A conta mudou durante a leitura.');
+    if (session.current !== current || version !== inboxEpoch.current) throw new Error('A caixa mudou durante a leitura.');
     await refresh();
+    if (session.current !== current || version !== inboxEpoch.current) throw new Error('A caixa mudou durante a leitura.');
     return item;
+  };
+
+  const clear = async (idempotencyKey: string) => {
+    const current = requireSession();
+    if (clearing.current) throw new Error('Limpeza de notificações em andamento.');
+    clearing.current = true;
+    const version = ++inboxEpoch.current;
+    try {
+      await clearNotifications(current.token, idempotencyKey);
+      if (session.current !== current || version !== inboxEpoch.current) {
+        throw new Error('A conta mudou durante a limpeza.');
+      }
+      inboxEpoch.current++;
+      setUnreadCount(0);
+      setPreferences((previous) => previous ? { ...previous, unreadCount: 0 } : previous);
+      setError(null);
+      setRevision((value) => value + 1);
+    } finally {
+      if (session.current === current) clearing.current = false;
+    }
+    // Reconcile genuinely new notices without turning a confirmed clear into a failure.
+    void refresh().catch((failure) => {
+      if (session.current === current) reportError(failure);
+    });
   };
 
   const setPushEnabled = async (enabled: boolean) => {
     const current = requireSession();
+    const version = inboxEpoch.current;
     setBusy(true);
     try {
       const saved = await saveNotificationPreference(current.token, enabled);
-      if (session.current === current) { setPreferences(saved); setError(null); }
+      if (session.current === current) {
+        setPreferences((previous) => version === inboxEpoch.current && !clearing.current
+          ? saved : { ...saved, unreadCount: previous?.unreadCount ?? 0 });
+        setError(null);
+      }
     } catch (failure) {
       if (session.current === current) reportError(failure);
     } finally { setBusy(false); }
@@ -199,8 +253,8 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
   return (
     <NotificationContext.Provider value={{
-      userId, preferences, unreadCount, permission, registered, busy, error, revision,
-      synchronise, setPushEnabled, refresh, list, read, reportError,
+      userId, preferences, unreadCount, permission, registered, busy, error, revision, sessionRevision,
+      synchronise, setPushEnabled, refresh, list, read, clear, reportError,
     }}>
       {children}
     </NotificationContext.Provider>

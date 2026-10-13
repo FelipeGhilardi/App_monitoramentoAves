@@ -59,6 +59,11 @@ test('inicia sem Outros e aplica a espécie escolhida', async () => {
     cursor: null, date: undefined, speciesId: null, includeUnidentified: false, sort: 'newest', limit: 50,
   }));
 
+  expect(screen.queryByLabelText('Filtrar por espécie')).toBeNull();
+  const filtersButton = screen.getByLabelText('Mostrar filtros');
+  expect(filtersButton.props.accessibilityState.expanded).toBe(false);
+  await fireEvent.press(filtersButton);
+  expect(screen.getByLabelText('Ocultar filtros').props.accessibilityState.expanded).toBe(true);
   await fireEvent.press(screen.getByLabelText('Filtrar por espécie'));
   await waitFor(() => expect(screen.getAllByText('Arara').length).toBeGreaterThan(1));
   expect(screen.queryByText('Ave não identificada')).toBeNull();

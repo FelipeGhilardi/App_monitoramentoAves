@@ -1,6 +1,6 @@
 import { apiFetch } from '../services/api';
 import {
-  fetchSightingById, fetchSightingsPage, formatSightingDate, getSightingTitle, SightingResponse,
+  fetchSightingById, fetchSightings, fetchSightingsPage, formatSightingDate, getSightingImageUrls, getSightingTitle, SightingResponse,
 } from '../services/sightings';
 
 jest.mock('../services/api', () => ({ apiFetch: jest.fn() }));
@@ -61,6 +61,32 @@ test('consulta uma página com filtros, ordenação e cursor', async () => {
 
   expect(mockApiFetch).toHaveBeenCalledWith(
     '/api/sightings?limit=50&sort=species_asc&cursor=cursor%2Fcurrent&from=2026-09-20&to=2026-09-20&speciesId=species%2F1&includeUnidentified=true',
+    { method: 'GET' }
+  );
+});
+
+test.each([
+  ['legado com foto', undefined, record.imageUrl, [record.imageUrl]],
+  ['legado sem foto', undefined, null, []],
+  ['galeria vazia com capa antiga', [], record.imageUrl, []],
+  ['uma foto com capa antiga', ['https://example.test/new.jpg'], record.imageUrl, ['https://example.test/new.jpg']],
+  ['quatro fotos ordenadas', ['d.jpg', 'c.jpg', 'b.jpg', 'a.jpg'], record.imageUrl, ['d.jpg', 'c.jpg', 'b.jpg', 'a.jpg']],
+] as const)('resolve apenas fotos reais: %s', (_, imageUrls, imageUrl, expected) => {
+  expect(getSightingImageUrls({
+    ...record, imageUrl, ...(imageUrls === undefined ? {} : { imageUrls: [...imageUrls] }),
+  })).toEqual(expected);
+});
+
+test('preserva a galeria ordenada no detalhe e a prévia de cinco registros na Home', async () => {
+  const galleryRecord = { ...record, imageUrls: ['four.jpg', 'three.jpg', 'two.jpg', 'one.jpg'] };
+  mockApiFetch.mockResolvedValueOnce(galleryRecord).mockResolvedValueOnce({
+    items: [galleryRecord], nextCursor: 'more', hasMore: true,
+  });
+
+  expect(await fetchSightingById(record.id)).toEqual({ success: true, data: galleryRecord });
+  expect(await fetchSightings()).toEqual({ success: true, data: [galleryRecord] });
+  expect(mockApiFetch).toHaveBeenLastCalledWith(
+    '/api/sightings?limit=5&sort=newest&includeUnidentified=true',
     { method: 'GET' }
   );
 });

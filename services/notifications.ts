@@ -40,6 +40,11 @@ export const fetchUnreadCount = (token: string) =>
 export const readNotification = (token: string, id: string) =>
   apiFetch<NotificationItem>(`/api/notifications/${encodeURIComponent(id)}/read`, { method: 'PATCH' }, token);
 
+export const clearNotifications = (token: string, idempotencyKey: string) =>
+  apiFetch<void>('/api/notifications', {
+    method: 'DELETE', headers: { 'Idempotency-Key': idempotencyKey },
+  }, token);
+
 export function notificationDestination(data: unknown): { sightingId: string; notificationId: string; userId: string } {
   if (!data || typeof data !== 'object') throw new Error('Notificação com destino inválido.');
   const record = data as Record<string, unknown>;

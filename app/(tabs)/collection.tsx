@@ -12,6 +12,10 @@ import ScreenState from '../../components/ScreenState';
 import IconButton from '../../components/IconButton';
 import SightingImageViewer from '../../components/SightingImageViewer';
 
+const UNIDENTIFIED_SPECIES_NAMES = new Set([
+  'outros', 'ave nao identificada', 'especie nao identificada',
+]);
+
 function SpeciesCard({ species, onImagePress }: {
   species: SpeciesResponse;
   onImagePress: (uri: string) => void;
@@ -96,7 +100,7 @@ export default function CollectionScreen() {
     setLoading(true);
     const result = await fetchSpecies();
     if (result.success && result.data) {
-      setSpecies(result.data);
+      setSpecies(result.data.filter((item) => !UNIDENTIFIED_SPECIES_NAMES.has(normalizeSpeciesName(item.name))));
       setError(null);
     } else {
       setSpecies([]);
@@ -178,6 +182,10 @@ export default function CollectionScreen() {
       )}
     </View>
   );
+}
+
+function normalizeSpeciesName(value: string): string {
+  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLocaleLowerCase('pt-BR');
 }
 
 const styles = StyleSheet.create({

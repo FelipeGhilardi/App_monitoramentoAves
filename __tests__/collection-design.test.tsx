@@ -51,6 +51,22 @@ test('busca por nome, busca vazia e limpar busca mantêm o catálogo', async () 
   expect(screen.getByText('Outra ave')).toBeTruthy();
 });
 
+test('esconde classificações sem identificação da coleção e da contagem', async () => {
+  jest.mocked(fetchSpecies).mockResolvedValueOnce({
+    success: true,
+    data: [
+      ...species,
+      { id: 'unknown', name: 'Ave não identificada', scientificName: 'Avis incognita', description: null, tips: null, imageUrl: null, createdAt: '', updatedAt: '' },
+      { id: 'other', name: 'Outros', scientificName: 'Avis alia', description: null, tips: null, imageUrl: null, createdAt: '', updatedAt: '' },
+    ],
+  });
+  const screen = await render(<CollectionScreen />);
+
+  await waitFor(() => expect(screen.getByText('2 espécies catalogadas')).toBeTruthy());
+  expect(screen.queryByText('Ave não identificada')).toBeNull();
+  expect(screen.queryByText('Outros')).toBeNull();
+});
+
 test('campo de busca mantém altura própria e espaço para limpar o texto', async () => {
   const screen = await render(<CollectionScreen />);
   await waitFor(() => expect(screen.getByText('Ave de teste')).toBeTruthy());

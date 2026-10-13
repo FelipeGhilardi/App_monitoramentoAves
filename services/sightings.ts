@@ -11,6 +11,7 @@ export interface SightingResponse {
   date: string;
   time: string;
   imageUrl: string | null;
+  imageUrls?: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -116,6 +117,12 @@ export async function fetchSightings(): Promise<SightingsResult> {
     return { success: false, message: result.message };
   }
   return { success: true, data: result.data.items };
+}
+
+export function getSightingImageUrls(sighting: SightingResponse): string[] {
+  if (sighting.imageUrls !== undefined) return sighting.imageUrls;
+  const legacyImage = sighting.imageUrl?.trim();
+  return legacyImage ? [legacyImage] : [];
 }
 
 /**

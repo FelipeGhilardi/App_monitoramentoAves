@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 import { login, logout, isLoggedIn } from '../services/auth';
 import { getToken, setToken } from '../services/api';
 import { deactivateNotificationDevice, registerNotificationDevice, hasPendingDeviceDeactivation } from '../services/notification-device';
-import { fetchNotifications, notificationDestination } from '../services/notifications';
+import { clearNotifications, fetchNotifications, notificationDestination } from '../services/notifications';
 
 const user = { id: 'user-a', name: 'Alice', email: 'alice@example.test', createdAt: '', updatedAt: '' };
 const token = `synthetic.${btoa(JSON.stringify({ exp: 4102444800 }))}.synthetic`;
@@ -39,6 +39,20 @@ test('consulta usa cursor escapado e token da sessão capturada, não de outra c
   const [url, options] = mockFetch.mock.calls[0];
   expect(url).toContain('cursor=opaque%2B%2F%3D');
   expect(options.headers.Authorization).toBe(`Bearer ${token}`);
+});
+
+test('limpeza usa DELETE autenticado e a mesma chave fornecida em retentativas', async () => {
+  await setToken('other-account-token');
+  await clearNotifications(token, 'confirmation-1');
+  await clearNotifications(token, 'confirmation-1');
+  expect(mockFetch).toHaveBeenCalledTimes(2);
+  for (const [url, options] of mockFetch.mock.calls) {
+    expect(url).toMatch(/\/api\/notifications$/);
+    expect(options.method).toBe('DELETE');
+    expect(options.headers['Idempotency-Key']).toBe('confirmation-1');
+    expect(options.headers.Authorization).toBe(`Bearer ${token}`);
+    expect(options.body).toBeUndefined();
+  }
 });
 
 test('falha de desativação impede logout; repetição retira somente a instalação e mantém histórico', async () => {
