@@ -9,6 +9,7 @@ export interface UserResponse {
   email: string;
   createdAt: string;
   updatedAt: string;
+  role?: 'USER' | 'ADMIN';
 }
 
 interface LoginResponse {
@@ -20,6 +21,7 @@ const USER_NAME_KEY = 'userName';
 const USER_EMAIL_KEY = 'userEmail';
 const USER_ID_KEY = 'userId';
 const USER_CREATED_AT_KEY = 'userCreatedAt';
+const USER_ROLE_KEY = 'userRole';
 
 export interface AuthResult {
   success: boolean;
@@ -93,6 +95,7 @@ async function clearSession(): Promise<void> {
     USER_EMAIL_KEY,
     USER_ID_KEY,
     USER_CREATED_AT_KEY,
+    USER_ROLE_KEY,
   ]);
   sessionChanged();
 }
@@ -167,11 +170,12 @@ export async function getUserEmail(): Promise<string | null> {
  * Retorna null se não houver usuário logado.
  */
 export async function getCurrentUser(): Promise<UserResponse | null> {
-  const [id, name, email, createdAt] = await Promise.all([
+  const [id, name, email, createdAt, role] = await Promise.all([
     AsyncStorage.getItem(USER_ID_KEY),
     AsyncStorage.getItem(USER_NAME_KEY),
     AsyncStorage.getItem(USER_EMAIL_KEY),
     AsyncStorage.getItem(USER_CREATED_AT_KEY),
+    AsyncStorage.getItem(USER_ROLE_KEY),
   ]);
 
   if (!id || !email) return null;
@@ -182,6 +186,7 @@ export async function getCurrentUser(): Promise<UserResponse | null> {
     email,
     createdAt: createdAt ?? '',
     updatedAt: '',
+    role: role === 'ADMIN' ? 'ADMIN' : 'USER',
   };
 }
 
@@ -191,5 +196,6 @@ async function storeUser(user: UserResponse): Promise<void> {
     [USER_NAME_KEY, user.name],
     [USER_EMAIL_KEY, user.email],
     [USER_CREATED_AT_KEY, user.createdAt ?? ''],
+    [USER_ROLE_KEY, user.role === 'ADMIN' ? 'ADMIN' : 'USER'],
   ]);
 }

@@ -1,14 +1,16 @@
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { isLoggedIn } from '../services/auth';
-import { fetchSightingById, SightingResponse } from '../services/sightings';
+import { getCurrentUser, isLoggedIn } from '../services/auth';
+import { deleteSighting, fetchSightingById, SightingResponse } from '../services/sightings';
 import SightingDetailScreen from '../app/sightings/[id]';
 
 jest.mock('expo-image', () => ({ Image: require('react-native').Image }));
 jest.mock('expo-router', () => ({ useLocalSearchParams: jest.fn(), useRouter: jest.fn() }));
-jest.mock('../services/auth', () => ({ isLoggedIn: jest.fn() }));
+jest.mock('../services/auth', () => ({ getCurrentUser: jest.fn(), isLoggedIn: jest.fn() }));
 jest.mock('../services/sightings', () => ({
   ...jest.requireActual('../services/sightings'),
+  deleteSighting: jest.fn(),
   fetchSightingById: jest.fn(),
 }));
 jest.mock('react-native-gesture-handler', () => {
@@ -49,6 +51,8 @@ const record: SightingResponse = {
 };
 const gallery = Array.from({ length: 4 }, (_, index) => `https://example.test/photo-${index + 1}.jpg`);
 const mockFetch = jest.mocked(fetchSightingById);
+const mockDelete = jest.mocked(deleteSighting);
+const mockCurrentUser = jest.mocked(getCurrentUser);
 const mockLogin = jest.mocked(isLoggedIn);
 const mockParams = jest.mocked(useLocalSearchParams);
 const mockRouter = jest.mocked(useRouter);
@@ -64,7 +68,11 @@ beforeEach(() => {
     canDismiss: () => false, setParams: jest.fn(), reload: jest.fn(), prefetch: jest.fn(),
   });
   mockLogin.mockResolvedValue(true);
+  mockCurrentUser.mockResolvedValue({
+    id: 'admin-1', name: 'Admin', email: 'admin@example.test', createdAt: '', updatedAt: '', role: 'ADMIN',
+  });
   mockFetch.mockResolvedValue({ success: true, data: record });
+  mockDelete.mockResolvedValue({ success: true });
 });
 
 afterEach(() => jest.useRealTimers());
@@ -90,6 +98,65 @@ test('sem imagem do registro exibe placeholder mesmo com imagem da espécie', as
   const screen = await render(<SightingDetailScreen />);
   await waitFor(() => expect(screen.getByText('Sem imagem do registro')).toBeTruthy());
   expect(screen.queryByLabelText('Ampliar foto do avistamento')).toBeNull();
+});
+
+test('confirma a exclusão do avistamento e retorna à tela anterior após sucesso', async () => {
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+  const screen = await render(<SightingDetailScreen />);
+  await waitFor(() => expect(screen.getByLabelText('Reportar avistamento incorreto')).toBeTruthy());
+
+  await fireEvent.press(screen.getByLabelText('Reportar avistamento incorreto'));
+  expect(alert).toHaveBeenCalledWith(
+    'Reportar avistamento incorreto',
+    'Este avistamento será removido permanentemente. Deseja continuar?',
+    expect.any(Array)
+  );
+
+  const buttons = alert.mock.calls[0][2] ?? [];
+  const removeButton = buttons.find((button) => button.style === 'destructive');
+  await act(async () => { removeButton?.onPress?.(); });
+
+  await waitFor(() => expect(mockDelete).toHaveBeenCalledWith('record-6'));
+  expect(back).toHaveBeenCalledTimes(1);
+  alert.mockRestore();
+});
+
+test('cancelar a confirmação não exclui o avistamento', async () => {
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+  const screen = await render(<SightingDetailScreen />);
+  await waitFor(() => expect(screen.getByLabelText('Reportar avistamento incorreto')).toBeTruthy());
+
+  await fireEvent.press(screen.getByLabelText('Reportar avistamento incorreto'));
+  const buttons = alert.mock.calls[0][2] ?? [];
+  buttons.find((button) => button.style === 'cancel')?.onPress?.();
+
+  expect(mockDelete).not.toHaveBeenCalled();
+  alert.mockRestore();
+});
+
+test('não mostra a ação de exclusão para usuários sem papel de administrador', async () => {
+  mockCurrentUser.mockResolvedValueOnce({
+    id: 'user-1', name: 'Usuário', email: 'user@example.test', createdAt: '', updatedAt: '', role: 'USER',
+  });
+  const screen = await render(<SightingDetailScreen />);
+  await waitFor(() => expect(screen.getAllByText('Sabiá')).toHaveLength(2));
+  expect(screen.queryByLabelText('Reportar avistamento incorreto')).toBeNull();
+});
+
+test('mantém o avistamento e informa a falha ao excluí-lo', async () => {
+  mockDelete.mockResolvedValueOnce({ success: false, status: 503, message: 'Serviço indisponível' });
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+  const screen = await render(<SightingDetailScreen />);
+  await waitFor(() => expect(screen.getByLabelText('Reportar avistamento incorreto')).toBeTruthy());
+
+  await fireEvent.press(screen.getByLabelText('Reportar avistamento incorreto'));
+  const confirmationButtons = alert.mock.calls[0][2] ?? [];
+  await act(async () => { confirmationButtons.find((button) => button.style === 'destructive')?.onPress?.(); });
+
+  await waitFor(() => expect(alert).toHaveBeenLastCalledWith('Não foi possível excluir', 'Serviço indisponível'));
+  expect(back).not.toHaveBeenCalled();
+  expect(screen.getByLabelText('Reportar avistamento incorreto')).toBeTruthy();
+  alert.mockRestore();
 });
 
 test('falha de imagem mostra erro e ação para tentar novamente', async () => {

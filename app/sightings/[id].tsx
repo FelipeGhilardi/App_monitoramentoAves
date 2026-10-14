@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator, PanResponder, Pressable, ScrollView, StyleSheet, Text, View,
+  ActivityIndicator, Alert, PanResponder, Pressable, ScrollView, StyleSheet, Text, View,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,9 +9,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import SightingImageViewer from '../../components/SightingImageViewer';
 import ScreenHeader from '../../components/ScreenHeader';
 import { theme } from '../../constants/theme';
-import { isLoggedIn } from '../../services/auth';
+import { getCurrentUser, isLoggedIn } from '../../services/auth';
 import {
-  fetchSightingById, formatSightingDate, getSightingImageUrls, getSightingTitle, SightingResponse,
+  deleteSighting, fetchSightingById, formatSightingDate, getSightingImageUrls, getSightingTitle, SightingResponse,
 } from '../../services/sightings';
 
 type PageStatus = 'loading' | 'ready' | 'unauthorized' | 'not-found' | 'error';
@@ -29,7 +29,17 @@ export default function SightingDetailScreen() {
   const [selectedPhoto, setSelectedPhoto] = useState(0);
   const [photoStates, setPhotoStates] = useState<Record<string, PhotoState>>({});
   const [showImage, setShowImage] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [canDelete, setCanDelete] = useState(false);
   const photoSession = useRef(0);
+
+  useEffect(() => {
+    let active = true;
+    void getCurrentUser().then((user) => {
+      if (active) setCanDelete(user?.role === 'ADMIN');
+    });
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     photoSession.current += 1;
@@ -95,6 +105,37 @@ export default function SightingDetailScreen() {
   const goBack = () => {
     if (router.canGoBack()) router.back();
     else router.replace('/(tabs)');
+  };
+
+  const removeSighting = async () => {
+    if (!sighting || deleting) return;
+
+    setDeleting(true);
+    const result = await deleteSighting(sighting.id);
+    setDeleting(false);
+
+    if (result.success) {
+      goBack();
+      return;
+    }
+
+    Alert.alert(
+      'Não foi possível excluir',
+      result.message ?? 'Não foi possível excluir o avistamento. Tente novamente.'
+    );
+  };
+
+  const confirmIncorrectSighting = () => {
+    if (!sighting || deleting) return;
+
+    Alert.alert(
+      'Reportar avistamento incorreto',
+      'Este avistamento será removido permanentemente. Deseja continuar?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Excluir avistamento', style: 'destructive', onPress: () => void removeSighting() },
+      ]
+    );
   };
 
   const photos = sighting ? getSightingImageUrls(sighting) : [];
@@ -268,6 +309,20 @@ export default function SightingDetailScreen() {
               <Text style={styles.scientificName}>{species.scientificName}</Text>
             </View>
           )) : <Text style={styles.date}>Nenhuma espécie informada.</Text>}
+
+          {canDelete && (
+            <Pressable
+              onPress={confirmIncorrectSighting}
+              disabled={deleting}
+              accessibilityRole="button"
+              accessibilityLabel="Reportar avistamento incorreto"
+              accessibilityState={{ disabled: deleting, busy: deleting }}
+              style={({ pressed }) => [styles.reportButton, (pressed || deleting) && styles.reportButtonPressed]}
+            >
+              <Ionicons name="flag-outline" size={20} color={theme.colors.danger} />
+              <Text style={styles.reportButtonText}>{deleting ? 'Excluindo avistamento...' : 'Reportar avistamento incorreto'}</Text>
+            </Pressable>
+          )}
         </ScrollView>
       )}
 
@@ -318,4 +373,10 @@ const styles = StyleSheet.create({
   },
   speciesName: { fontSize: theme.fonts.sizes.md, fontWeight: '600', color: theme.colors.textPrimary },
   scientificName: { fontSize: theme.fonts.sizes.sm, color: theme.colors.textSecondary, fontStyle: 'italic' },
+  reportButton: {
+    minHeight: theme.touchTarget, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: theme.spacing.sm,
+    borderWidth: 1, borderColor: theme.colors.danger, borderRadius: theme.radius.md, marginTop: theme.spacing.lg, paddingHorizontal: theme.spacing.md,
+  },
+  reportButtonPressed: { opacity: 0.6 },
+  reportButtonText: { color: theme.colors.danger, fontSize: theme.fonts.sizes.md, fontWeight: '600' },
 });

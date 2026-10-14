@@ -52,6 +52,12 @@ export interface SightingDetailResult {
   message?: string;
 }
 
+export interface SightingDeletionResult {
+  success: boolean;
+  status?: number;
+  message?: string;
+}
+
 export async function fetchSightingById(id: string): Promise<SightingDetailResult> {
   if (!id.trim()) {
     return { success: false, status: 400, message: 'Avistamento inválido.' };
@@ -69,6 +75,24 @@ export async function fetchSightingById(id: string): Promise<SightingDetailResul
       success: false,
       status: apiErr.status,
       message: apiErr.message ?? 'Erro ao carregar avistamento.',
+    };
+  }
+}
+
+export async function deleteSighting(id: string): Promise<SightingDeletionResult> {
+  if (!id.trim()) {
+    return { success: false, status: 400, message: 'Avistamento inválido.' };
+  }
+
+  try {
+    await apiFetch<void>(`/api/sightings/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    return { success: true };
+  } catch (err) {
+    const apiErr = err as ApiError;
+    return {
+      success: false,
+      status: apiErr.status,
+      message: apiErr.message ?? 'Não foi possível excluir o avistamento.',
     };
   }
 }

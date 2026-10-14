@@ -1,6 +1,6 @@
 import { apiFetch } from '../services/api';
 import {
-  fetchSightingById, fetchSightings, fetchSightingsPage, formatSightingDate, getSightingImageUrls, getSightingTitle, SightingResponse,
+  deleteSighting, fetchSightingById, fetchSightings, fetchSightingsPage, formatSightingDate, getSightingImageUrls, getSightingTitle, SightingResponse,
 } from '../services/sightings';
 
 jest.mock('../services/api', () => ({ apiFetch: jest.fn() }));
@@ -41,6 +41,28 @@ test.each([401, 404, 0])('preserva o status %i e a mensagem do erro', async (sta
 
 test('não faz requisição com ID vazio', async () => {
   expect(await fetchSightingById('  ')).toEqual({
+    success: false, status: 400, message: 'Avistamento inválido.',
+  });
+  expect(mockApiFetch).not.toHaveBeenCalled();
+});
+
+test('exclui um avistamento pelo ID codificado', async () => {
+  mockApiFetch.mockResolvedValueOnce(undefined);
+
+  expect(await deleteSighting('sighting/1')).toEqual({ success: true });
+  expect(mockApiFetch).toHaveBeenCalledWith('/api/sightings/sighting%2F1', { method: 'DELETE' });
+});
+
+test.each([401, 404, 503])('preserva o erro %i ao excluir', async (status) => {
+  mockApiFetch.mockRejectedValueOnce({ status, message: 'Não foi possível excluir' });
+
+  expect(await deleteSighting('sighting-1')).toEqual({
+    success: false, status, message: 'Não foi possível excluir',
+  });
+});
+
+test('não exclui com ID vazio', async () => {
+  expect(await deleteSighting('  ')).toEqual({
     success: false, status: 400, message: 'Avistamento inválido.',
   });
   expect(mockApiFetch).not.toHaveBeenCalled();
