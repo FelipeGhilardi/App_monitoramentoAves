@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  FlatList, Modal, Pressable, ScrollView, StyleSheet, Switch,
-  Text, TextInput, View,
+  FlatList, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch,
+  Text, View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import { format } from 'date-fns';
 import { useRouter } from 'expo-router';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import SightingCard from '../../components/SightingCard';
@@ -79,7 +81,7 @@ export default function SightingsScreen() {
   const requestVersion = useRef(0);
   const [species, setSpecies] = useState<SpeciesResponse[]>([]);
   const [speciesError, setSpeciesError] = useState<string | null>(null);
-  const [date, setDate] = useState('');
+  const [date, setDate] = useState<Date | null>(null);
   const [selectedSpeciesId, setSelectedSpeciesId] = useState<string | null>(null);
   const [includeUnidentified, setIncludeUnidentified] = useState(false);
   const [sort, setSort] = useState<SightingsSort>('newest');
@@ -92,9 +94,9 @@ export default function SightingsScreen() {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [dateError, setDateError] = useState<string | null>(null);
   const [choice, setChoice] = useState<'species' | 'sort' | null>(null);
   const [filtersExpanded, setFiltersExpanded] = useState(false);
+  const [datePickerVisible, setDatePickerVisible] = useState(false);
 
   const loadSpecies = useCallback(async () => {
     const result = await fetchSpecies();
@@ -157,14 +159,8 @@ export default function SightingsScreen() {
   useEffect(() => subscribeToSightingChanges(() => { void loadSightings(null, false); }), [loadSightings]);
 
   const applyFilters = () => {
-    const normalizedDate = date.trim();
-    if (normalizedDate && !/^\d{4}-\d{2}-\d{2}$/.test(normalizedDate)) {
-      setDateError('Informe a data no formato AAAA-MM-DD.');
-      return;
-    }
-    setDateError(null);
     setActiveFilters({
-      date: normalizedDate,
+      date: date ? format(date, 'yyyy-MM-dd') : '',
       speciesId: selectedSpeciesId,
       includeUnidentified,
       sort,
@@ -172,16 +168,21 @@ export default function SightingsScreen() {
   };
 
   const clearFilters = () => {
-    setDate('');
+    setDate(null);
     setSelectedSpeciesId(null);
     setIncludeUnidentified(false);
     setSort('newest');
-    setDateError(null);
     setActiveFilters({ date: '', speciesId: null, includeUnidentified: false, sort: 'newest' });
+  };
+
+  const handleDateChange = (_event: DateTimePickerEvent, selectedDate?: Date) => {
+    if (Platform.OS === 'android') setDatePickerVisible(false);
+    if (selectedDate) setDate(selectedDate);
   };
 
   const selectedSpecies = species.find((item) => item.id === selectedSpeciesId);
   const selectedSort = sortOptions.find((item) => item.id === sort)?.label ?? 'Mais recentes';
+  const selectedDateLabel = date ? format(date, 'dd/MM/yyyy') : 'Selecionar dia';
   const speciesOptions = [{ id: '', label: 'Todas as espécies' }, ...species.map((item) => ({ id: item.id, label: item.name }))];
 
   return (
@@ -224,19 +225,38 @@ export default function SightingsScreen() {
             </Pressable>
             {filtersExpanded && (
               <View style={styles.filterContent}>
-                <TextInput
+                <Pressable
+                  accessibilityRole="button"
                   accessibilityLabel="Filtrar por dia"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  keyboardType="numbers-and-punctuation"
-                  maxLength={10}
-                  placeholder="Dia (AAAA-MM-DD)"
-                  placeholderTextColor={theme.colors.textSecondary}
-                  value={date}
-                  onChangeText={setDate}
-                  style={[styles.dateInput, dateError && styles.inputError]}
-                />
-                {dateError && <Text accessibilityRole="alert" style={styles.errorText}>{dateError}</Text>}
+                  accessibilityHint="Abre o seletor de data"
+                  accessibilityValue={{ text: date ? `Data selecionada: ${selectedDateLabel}` : 'Nenhuma data selecionada' }}
+                  onPress={() => setDatePickerVisible(true)}
+                  style={({ pressed }) => [styles.select, pressed && styles.pressed]}
+                >
+                  <Text style={styles.selectLabel}>Dia</Text>
+                  <Text style={styles.selectValue}>{selectedDateLabel}</Text>
+                  <Ionicons name="calendar-outline" size={20} color={theme.colors.textSecondary} />
+                </Pressable>
+                {datePickerVisible && (
+                  <View style={styles.datePicker}>
+                    <DateTimePicker
+                      value={date ?? new Date()}
+                      mode="date"
+                      display="default"
+                      onChange={handleDateChange}
+                    />
+                    {Platform.OS === 'ios' && (
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel="Concluir seleção de data"
+                        onPress={() => setDatePickerVisible(false)}
+                        style={({ pressed }) => [styles.doneDateButton, pressed && styles.pressed]}
+                      >
+                        <Text style={styles.doneDateText}>Concluído</Text>
+                      </Pressable>
+                    )}
+                  </View>
+                )}
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel="Filtrar por espécie"
@@ -346,8 +366,9 @@ const styles = StyleSheet.create({
   filterToggle: { minHeight: theme.touchTarget, flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm },
   filterTitle: { flex: 1, fontSize: theme.fonts.sizes.lg, fontWeight: '700', color: theme.colors.textPrimary },
   filterContent: { gap: theme.spacing.sm },
-  dateInput: { minHeight: theme.touchTarget, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radius.md, color: theme.colors.textPrimary, fontSize: theme.fonts.sizes.md, paddingHorizontal: 12 },
-  inputError: { borderColor: theme.colors.danger },
+  datePicker: { alignItems: 'center', borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radius.md, overflow: 'hidden' },
+  doneDateButton: { alignSelf: 'stretch', minHeight: theme.touchTarget, alignItems: 'center', justifyContent: 'center', borderTopWidth: StyleSheet.hairlineWidth, borderColor: theme.colors.border },
+  doneDateText: { color: theme.colors.primary, fontSize: theme.fonts.sizes.md, fontWeight: '600' },
   select: { minHeight: theme.touchTarget, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radius.md, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm },
   selectLabel: { flex: 1, color: theme.colors.textPrimary, fontSize: theme.fonts.sizes.md },
   selectValue: { maxWidth: '52%', color: theme.colors.textSecondary, fontSize: theme.fonts.sizes.sm, textAlign: 'right' },

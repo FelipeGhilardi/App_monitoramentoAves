@@ -8,6 +8,10 @@ import { notifySightingsChanged } from '../services/sighting-events';
 
 jest.mock('expo-image', () => ({ Image: require('react-native').Image }));
 jest.mock('expo-router', () => ({ useRouter: jest.fn() }));
+jest.mock('@react-native-community/datetimepicker', () => {
+  const { View } = require('react-native');
+  return (props: object) => <View testID="date-picker" {...props} />;
+});
 jest.mock('../services/species', () => ({ fetchSpecies: jest.fn() }));
 jest.mock('../services/sightings', () => ({
   ...jest.requireActual('../services/sightings'),
@@ -74,6 +78,35 @@ test('inicia sem Outros e aplica a espécie escolhida', async () => {
   await waitFor(() => expect(mockFetchSightingsPage).toHaveBeenLastCalledWith({
     cursor: null, date: undefined, speciesId: 'arara', includeUnidentified: false, sort: 'newest', limit: 50,
   }));
+});
+
+test('seleciona, cancela e limpa o filtro de dia nativo', async () => {
+  mockFetchSightingsPage.mockResolvedValue({
+    success: true,
+    data: { items: [sighting('1', 'Arara')], nextCursor: null, hasMore: false },
+  });
+  const screen = await renderScreen();
+  await waitFor(() => expect(mockFetchSightingsPage).toHaveBeenCalledTimes(1));
+
+  await fireEvent.press(screen.getByLabelText('Mostrar filtros'));
+  await fireEvent.press(screen.getByLabelText('Filtrar por dia'));
+  const picker = screen.getByTestId('date-picker');
+  await fireEvent(picker, 'onChange', { type: 'set' }, new Date(2026, 8, 20));
+  expect(screen.getByText('20/09/2026')).toBeTruthy();
+
+  await fireEvent(picker, 'onChange', { type: 'dismissed' }, undefined);
+  expect(screen.getByText('20/09/2026')).toBeTruthy();
+
+  await fireEvent.press(screen.getByText('Aplicar filtros'));
+  await waitFor(() => expect(mockFetchSightingsPage).toHaveBeenLastCalledWith({
+    cursor: null, date: '2026-09-20', speciesId: null, includeUnidentified: false, sort: 'newest', limit: 50,
+  }));
+
+  await fireEvent.press(screen.getByText('Limpar'));
+  await waitFor(() => expect(mockFetchSightingsPage).toHaveBeenLastCalledWith({
+    cursor: null, date: undefined, speciesId: null, includeUnidentified: false, sort: 'newest', limit: 50,
+  }));
+  expect(screen.getByText('Selecionar dia')).toBeTruthy();
 });
 
 test('carrega a próxima página usando o cursor retornado', async () => {
