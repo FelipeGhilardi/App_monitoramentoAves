@@ -1,10 +1,11 @@
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import HomeScreen from '../app/(tabs)/index';
 import { getCurrentUser, logout, updateProfile, UserResponse } from '../services/auth';
 import appConfig from '../app.json';
 import { fetchSightings, SightingResponse } from '../services/sightings';
+import { notifySightingsChanged } from '../services/sighting-events';
 import { NotificationProvider } from '../services/notification-context';
 
 jest.mock('expo-image', () => ({ Image: require('react-native').Image }));
@@ -149,6 +150,18 @@ test('atualiza a prévia de avistamentos pelo botão de refresh', async () => {
   await waitFor(() => expect(screen.getByLabelText('Ver avistamento: Ave 1')).toBeTruthy());
 
   await fireEvent.press(screen.getByLabelText('Atualizar avistamentos'));
+
+  await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(screen.getByLabelText('Atualizar avistamentos').props.accessibilityState.busy).toBe(false));
+});
+
+test('atualiza a prévia automaticamente após remover um avistamento', async () => {
+  const refreshed = [{ ...sightings[0], id: 'updated-id' }];
+  mockFetch.mockResolvedValueOnce({ success: true, data: sightings }).mockResolvedValueOnce({ success: true, data: refreshed });
+  const screen = await renderHome();
+  await waitFor(() => expect(screen.getByLabelText('Ver avistamento: Ave 1')).toBeTruthy());
+
+  await act(async () => { notifySightingsChanged(); });
 
   await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(2));
   await waitFor(() => expect(screen.getByLabelText('Atualizar avistamentos').props.accessibilityState.busy).toBe(false));

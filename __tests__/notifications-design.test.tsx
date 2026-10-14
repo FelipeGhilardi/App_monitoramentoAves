@@ -1,6 +1,6 @@
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Platform, Pressable, Text, View } from 'react-native';
+import { Alert, AlertButton, Platform, Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { isRunningInExpoGo } from 'expo';
 import * as Notifications from 'expo-notifications';
@@ -24,6 +24,7 @@ let count: number;
 let failClear = false;
 let loginUser = user;
 let activeNotifications: ReturnType<typeof useNotifications>;
+let clearAlert: jest.SpyInstance;
 
 const response = (value: unknown, status = 200): Response => ({
   ok: status >= 200 && status < 300, status, text: async () => value == null ? '' : JSON.stringify(value),
@@ -41,6 +42,7 @@ beforeEach(async () => {
   inbox = [notice];
   count = 1;
   loginUser = user;
+  clearAlert = jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
   mockFetch.mockReset();
   mockFetch.mockImplementation(async (url: string, options: RequestInit) => {
     if (url.endsWith('/api/auth/login')) return response({ token, user: loginUser });
@@ -92,16 +94,55 @@ beforeEach(async () => {
     return { promise, resolve };
   }
 
+  function clearButtons(): AlertButton[] {
+    return (clearAlert.mock.calls.at(-1)?.[2] ?? []) as AlertButton[];
+  }
+
+  async function confirmClear(screen: Awaited<ReturnType<typeof render>>) {
+    await fireEvent.press(screen.getByLabelText('Limpar notificações'));
+    const buttons = clearButtons();
+    await act(async () => { buttons.find((button) => button.style === 'destructive')?.onPress?.(); });
+  }
+
+  function cancelClear() {
+    const buttons = clearButtons();
+    buttons.find((button) => button.style === 'cancel')?.onPress?.();
+  }
+
+  test('abre a caixa em carregamento e não repete a consulta ao sincronizar alertas', async () => {
+    const pending = deferredResponse();
+    const handler = mockFetch.getMockImplementation()!;
+    mockFetch.mockImplementation((url: string, options: RequestInit) =>
+      url.includes('/notifications?') ? pending.promise : handler(url, options));
+
+    const screen = await render(<NotificationProvider><InboxStatus />
+      <NotificationsModal visible onClose={() => {}} /></NotificationProvider>);
+
+    expect(screen.getByText('Carregando notificações...')).toBeTruthy();
+    await act(async () => { pending.resolve(response({ items: inbox, nextCursor: null })); });
+    await waitFor(() => expect(screen.getByLabelText('Não lida: Novo avistamento registrado')).toBeTruthy());
+
+    const pageCalls = () => mockFetch.mock.calls.filter(([url]) => String(url).includes('/notifications?'));
+    const beforeSynchronise = pageCalls().length;
+    await act(async () => { await activeNotifications.synchronise(); });
+    await act(async () => { await Promise.resolve(); });
+
+    expect(pageCalls()).toHaveLength(beforeSynchronise);
+  });
+
   test('limpeza pede confirmação; cancelar não chama a API; sucesso esvazia e novos eventos continuam', async () => {
     const screen = await render(<NotificationProvider><InboxStatus />
       <NotificationsModal visible onClose={() => {}} /></NotificationProvider>);
     await waitFor(() => expect(screen.getByLabelText('Não lida: Novo avistamento registrado')).toBeTruthy());
     await fireEvent.press(screen.getByLabelText('Limpar notificações'));
-    expect(screen.getByText('Limpar todas as suas notificações? Você continuará recebendo novos avisos.')).toBeTruthy();
-    await fireEvent.press(screen.getByLabelText('Cancelar limpeza'));
+    expect(clearAlert).toHaveBeenLastCalledWith(
+      'Limpar notificações?',
+      'Todas as notificações atuais serão removidas. Novos avisos continuarão chegando.',
+      expect.any(Array)
+    );
+    cancelClear();
     expect(mockFetch.mock.calls.some(([url]) => url.endsWith('/api/notifications'))).toBe(false);
-    await fireEvent.press(screen.getByLabelText('Limpar notificações'));
-    await fireEvent.press(screen.getByLabelText('Confirmar limpeza'));
+    await confirmClear(screen);
     await waitFor(() => expect(screen.getByText('Nenhuma notificação ainda')).toBeTruthy());
     expect(screen.getByTestId('notification-count').props.children).toBe(0);
     expect(screen.getByLabelText('Limpar notificações').props.accessibilityState.disabled).toBe(true);
@@ -119,8 +160,7 @@ beforeEach(async () => {
     const screen = await render(<NotificationProvider><InboxStatus />
       <NotificationsModal visible onClose={() => {}} /></NotificationProvider>);
     await waitFor(() => expect(screen.getByLabelText('Não lida: Novo avistamento registrado')).toBeTruthy());
-    await fireEvent.press(screen.getByLabelText('Limpar notificações'));
-    await fireEvent.press(screen.getByLabelText('Confirmar limpeza'));
+    await confirmClear(screen);
     await waitFor(() => expect(screen.getByText('Falha sintética de limpeza')).toBeTruthy());
     expect(screen.getByLabelText('Não lida: Novo avistamento registrado')).toBeTruthy();
     expect(screen.getByTestId('notification-count').props.children).toBe(1);
@@ -128,10 +168,10 @@ beforeEach(async () => {
     const handler = mockFetch.getMockImplementation()!;
     mockFetch.mockImplementation((url: string, options: RequestInit) =>
       url.endsWith('/api/notifications') ? pending.promise : handler(url, options));
-    await fireEvent.press(screen.getByLabelText('Confirmar limpeza'));
-    expect(screen.getByText('Limpando notificações...')).toBeTruthy();
-    expect(screen.getByLabelText('Confirmar limpeza').props.accessibilityState.disabled).toBe(true);
-    await fireEvent.press(screen.getByLabelText('Confirmar limpeza'));
+    await confirmClear(screen);
+    expect(screen.getByText('Limpando...')).toBeTruthy();
+    expect(screen.getByLabelText('Limpar notificações').props.accessibilityState.disabled).toBe(true);
+    await fireEvent.press(screen.getByLabelText('Limpar notificações'));
     await fireEvent.press(screen.getByLabelText('Não lida: Novo avistamento registrado'));
     expect(push).not.toHaveBeenCalled();
     const deletes = mockFetch.mock.calls.filter(([url]) => url.endsWith('/api/notifications'));
@@ -169,7 +209,8 @@ beforeEach(async () => {
     await act(async () => { listener({} as Notifications.Notification); });
     await waitFor(() => expect(capturePage).toBe(false));
     expect(screen.getByLabelText('Limpar notificações').props.accessibilityState.disabled).toBe(true);
-    await fireEvent.press(screen.getByLabelText('Confirmar limpeza'));
+    const buttons = clearButtons();
+    await act(async () => { buttons.find((button) => button.style === 'destructive')?.onPress?.(); });
     await waitFor(() => expect(screen.getByText('Nenhuma notificação ainda')).toBeTruthy());
     await act(async () => {
       staleCount.resolve(response({ unreadCount: 99 }));
@@ -188,8 +229,7 @@ beforeEach(async () => {
     const handler = mockFetch.getMockImplementation()!;
     mockFetch.mockImplementation((url: string, options: RequestInit) =>
       url.endsWith('/api/notifications') ? pending.promise : handler(url, options));
-    await fireEvent.press(screen.getByLabelText('Limpar notificações'));
-    await fireEvent.press(screen.getByLabelText('Confirmar limpeza'));
+    await confirmClear(screen);
     loginUser = { ...user, id: 'user-b', name: 'Bob' };
     inbox = [{ ...notice, id: 'bob-notice', title: 'Aviso de Bob' }];
     await act(async () => { await login('bob@example.test', 'synthetic-password'); });
@@ -209,8 +249,7 @@ test('leitura iniciada antes da limpeza não confirma resultado nem altera conta
   mockFetch.mockImplementation((url: string, options: RequestInit) =>
     url.endsWith('/read') ? pending.promise : handler(url, options));
   const reading = activeNotifications.read(notice.id).catch((failure) => failure);
-  await fireEvent.press(screen.getByLabelText('Limpar notificações'));
-  await fireEvent.press(screen.getByLabelText('Confirmar limpeza'));
+  await confirmClear(screen);
   await waitFor(() => expect(screen.getByText('Nenhuma notificação ainda')).toBeTruthy());
   await act(async () => { pending.resolve(response({ ...notice, readAt: '2026-01-01T00:01:00Z' })); });
   expect(await reading).toEqual(new Error('A caixa mudou durante a leitura.'));
@@ -228,7 +267,7 @@ test('limpeza fica desabilitada durante uma leitura da caixa', async () => {
   await fireEvent.press(screen.getByLabelText('Não lida: Novo avistamento registrado'));
   expect(screen.getByLabelText('Limpar notificações').props.accessibilityState.disabled).toBe(true);
   await fireEvent.press(screen.getByLabelText('Limpar notificações'));
-  expect(screen.queryByLabelText('Confirmar limpeza')).toBeNull();
+  expect(clearAlert).not.toHaveBeenCalled();
   await act(async () => { pending.resolve(response({ ...notice, readAt: '2026-01-01T00:01:00Z' })); });
   await waitFor(() => expect(push).toHaveBeenCalledTimes(1));
   expect(mockFetch.mock.calls.some(([url]) => url.endsWith('/api/notifications'))).toBe(false);
@@ -242,8 +281,7 @@ test('resposta antiga também é ignorada após renovar sessão da mesma conta',
   const handler = mockFetch.getMockImplementation()!;
   mockFetch.mockImplementation((url: string, options: RequestInit) =>
     url.endsWith('/api/notifications') ? pending.promise : handler(url, options));
-  await fireEvent.press(screen.getByLabelText('Limpar notificações'));
-  await fireEvent.press(screen.getByLabelText('Confirmar limpeza'));
+  await confirmClear(screen);
   inbox = [{ ...notice, id: 'session-notice', title: 'Aviso na sessão renovada' }];
   await act(async () => { await login(user.email, 'synthetic-password'); });
   await waitFor(() => expect(screen.getByLabelText('Não lida: Aviso na sessão renovada')).toBeTruthy());
@@ -277,18 +315,10 @@ test('falha ao marcar leitura é explícita e não navega nem confirma sucesso',
   expect(onClose).not.toHaveBeenCalled();
 });
 
-test('Expo Go mantém histórico e preferência, explica a limitação e não tenta cadastrar push', async () => {
+test('Expo Go mantém o histórico sem tentar cadastrar push', async () => {
   jest.mocked(isRunningInExpoGo).mockReturnValue(true);
-  const screen = await render(<NotificationProvider>
-    <SettingsModal visible user={user} onClose={() => {}}
-      onEdit={() => {}} onAbout={() => {}} onLogout={() => {}} loggingOut={false} />
-    <NotificationsModal visible onClose={() => {}} />
-  </NotificationProvider>);
-  await waitFor(() => expect(screen.getByText('Push exige uma build própria do app; não funciona no Expo Go.')).toBeTruthy());
+  const screen = await render(<NotificationProvider><NotificationsModal visible onClose={() => {}} /></NotificationProvider>);
   await waitFor(() => expect(screen.getByLabelText('Não lida: Novo avistamento registrado')).toBeTruthy());
-  await fireEvent(screen.getByLabelText('Push de novos avistamentos'), 'change', { nativeEvent: { value: false } });
-  await waitFor(() => expect(pushEnabled).toBe(false));
-  await fireEvent.press(screen.getByText('Sincronizar alertas'));
   expect(Notifications.getPermissionsAsync).not.toHaveBeenCalled();
   expect(Notifications.requestPermissionsAsync).not.toHaveBeenCalled();
   expect(Notifications.getDevicePushTokenAsync).not.toHaveBeenCalled();
@@ -297,17 +327,11 @@ test('Expo Go mantém histórico e preferência, explica a limitação e não te
   expect(mockFetch.mock.calls.some(([url]) => url.includes('/notification-devices/'))).toBe(false);
 });
 
-test('preferência confirma no backend e permissão Android só é solicitada após ação explicativa', async () => {
-  const screen = await render(<NotificationProvider><SettingsModal visible user={user} onClose={() => {}}
-    onEdit={() => {}} onAbout={() => {}} onLogout={() => {}} loggingOut={false} /></NotificationProvider>);
-  await waitFor(() => expect(screen.getByLabelText('Push de novos avistamentos').props.enabled).toBe(true));
-  await fireEvent(screen.getByLabelText('Push de novos avistamentos'), 'change', { nativeEvent: { value: false } });
-  await waitFor(() => expect(screen.getByLabelText('Push de novos avistamentos').props.on).toBe(false));
-  expect(pushEnabled).toBe(false);
-  expect(Notifications.requestPermissionsAsync).not.toHaveBeenCalled();
-  await fireEvent.press(screen.getByText('Sincronizar alertas'));
-  await waitFor(() => expect(screen.getByText('Este dispositivo está registrado.')).toBeTruthy());
-  expect(Notifications.setNotificationChannelAsync).toHaveBeenCalledWith('sightings', expect.any(Object));
-  expect(Notifications.getDevicePushTokenAsync).toHaveBeenCalled();
-  expect(mockFetch.mock.calls.some(([url, options]) => url.includes('/notification-devices/') && options.method === 'PUT')).toBe(true);
+test('Configurações não exibe mais controles ou status de notificações', async () => {
+  const screen = await render(<SettingsModal visible user={user} onClose={() => {}}
+    onEdit={() => {}} onAbout={() => {}} onLogout={() => {}} loggingOut={false} />);
+
+  expect(screen.queryByText('Notificações')).toBeNull();
+  expect(screen.queryByLabelText('Push de novos avistamentos')).toBeNull();
+  expect(screen.queryByText('Sincronizar alertas')).toBeNull();
 });

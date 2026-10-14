@@ -10,6 +10,7 @@ import SightingImageViewer from '../../components/SightingImageViewer';
 import ScreenHeader from '../../components/ScreenHeader';
 import { theme } from '../../constants/theme';
 import { getCurrentUser, isLoggedIn } from '../../services/auth';
+import { notifySightingsChanged } from '../../services/sighting-events';
 import {
   deleteSighting, fetchSightingById, formatSightingDate, getSightingImageUrls, getSightingTitle, SightingResponse,
 } from '../../services/sightings';
@@ -115,6 +116,7 @@ export default function SightingDetailScreen() {
     setDeleting(false);
 
     if (result.success) {
+      notifySightingsChanged();
       goBack();
       return;
     }

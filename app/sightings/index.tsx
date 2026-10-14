@@ -15,6 +15,7 @@ import { fetchSpecies, SpeciesResponse } from '../../services/species';
 import {
   fetchSightingsPage, SightingResponse, SightingsSort,
 } from '../../services/sightings';
+import { subscribeToSightingChanges } from '../../services/sighting-events';
 
 const PAGE_SIZE = 50;
 const UNIDENTIFIED_SPECIES_NAMES = new Set([
@@ -152,6 +153,8 @@ export default function SightingsScreen() {
   useEffect(() => {
     void loadSightings(null, false);
   }, [loadSightings]);
+
+  useEffect(() => subscribeToSightingChanges(() => { void loadSightings(null, false); }), [loadSightings]);
 
   const applyFilters = () => {
     const normalizedDate = date.trim();

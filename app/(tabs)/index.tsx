@@ -4,6 +4,7 @@ import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { getCurrentUser, logout, UserResponse } from '../../services/auth';
 import { fetchSightings, SightingResponse } from '../../services/sightings';
+import { subscribeToSightingChanges } from '../../services/sighting-events';
 import { theme } from '../../constants/theme';
 import { EditProfileModal, ProfileModal } from '../../components/AccountModals';
 import AppAlert from '../../components/AppAlert';
@@ -55,6 +56,8 @@ export default function HomeScreen() {
     if (refresh) setRefreshingSightings(false);
     else setLoadingSightings(false);
   }, []);
+
+  useEffect(() => subscribeToSightingChanges(() => { void loadSightings(true); }), [loadSightings]);
 
   useEffect(() => {
     void loadUser();
@@ -108,7 +111,7 @@ export default function HomeScreen() {
         />
         {notifications.error && <ScreenState title="Notificações indisponíveis" message={notifications.error}
           actionLabel="Tentar novamente" onAction={() => void notifications.synchronise()} />}
-        {notifications.permission !== 'granted' && notifications.permission !== 'unsupported' && notifications.userId && (
+        {(notifications.permission === 'denied' || notifications.permission === 'undetermined') && notifications.userId && (
           <ScreenState title="Alertas de novos avistamentos"
             message="O histórico funciona sem permissão. Ative os alertas para receber avisos no Android."
             actionLabel="Ativar alertas" onAction={() => void notifications.synchronise(true)} />

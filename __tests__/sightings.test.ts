@@ -108,7 +108,7 @@ test('preserva a galeria ordenada no detalhe e a prévia de cinco registros na H
   expect(await fetchSightingById(record.id)).toEqual({ success: true, data: galleryRecord });
   expect(await fetchSightings()).toEqual({ success: true, data: [galleryRecord] });
   expect(mockApiFetch).toHaveBeenLastCalledWith(
-    '/api/sightings?limit=5&sort=newest&includeUnidentified=true',
+    '/api/sightings?limit=5&sort=newest',
     { method: 'GET' }
   );
 });

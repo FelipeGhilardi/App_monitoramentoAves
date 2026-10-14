@@ -1,9 +1,10 @@
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import SightingsScreen from '../app/sightings';
 import { fetchSpecies } from '../services/species';
 import { fetchSightingsPage, SightingResponse } from '../services/sightings';
+import { notifySightingsChanged } from '../services/sighting-events';
 
 jest.mock('expo-image', () => ({ Image: require('react-native').Image }));
 jest.mock('expo-router', () => ({ useRouter: jest.fn() }));
@@ -100,6 +101,21 @@ test('atualiza a primeira página sem alterar os filtros aplicados', async () =>
   await fireEvent.press(screen.getByLabelText('Atualizar avistamentos'));
 
   await waitFor(() => expect(mockFetchSightingsPage).toHaveBeenCalledTimes(2));
+  expect(mockFetchSightingsPage).toHaveBeenLastCalledWith({
+    cursor: null, date: undefined, speciesId: null, includeUnidentified: false, sort: 'newest', limit: 50,
+  });
+});
+
+test('atualiza a lista automaticamente após remover um avistamento', async () => {
+  mockFetchSightingsPage
+    .mockResolvedValueOnce({ success: true, data: { items: [sighting('1', 'Arara')], nextCursor: null, hasMore: false } })
+    .mockResolvedValueOnce({ success: true, data: { items: [sighting('2', 'Tucano')], nextCursor: null, hasMore: false } });
+  const screen = await renderScreen();
+  await waitFor(() => expect(screen.getByLabelText('Ver avistamento: Arara')).toBeTruthy());
+
+  await act(async () => { notifySightingsChanged(); });
+
+  await waitFor(() => expect(screen.getByLabelText('Ver avistamento: Tucano')).toBeTruthy());
   expect(mockFetchSightingsPage).toHaveBeenLastCalledWith({
     cursor: null, date: undefined, speciesId: null, includeUnidentified: false, sort: 'newest', limit: 50,
   });

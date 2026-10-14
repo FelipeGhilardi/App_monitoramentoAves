@@ -3,6 +3,7 @@ import { Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { getCurrentUser, isLoggedIn } from '../services/auth';
 import { deleteSighting, fetchSightingById, SightingResponse } from '../services/sightings';
+import * as sightingEvents from '../services/sighting-events';
 import SightingDetailScreen from '../app/sightings/[id]';
 
 jest.mock('expo-image', () => ({ Image: require('react-native').Image }));
@@ -102,6 +103,7 @@ test('sem imagem do registro exibe placeholder mesmo com imagem da espécie', as
 
 test('confirma a exclusão do avistamento e retorna à tela anterior após sucesso', async () => {
   const alert = jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+  const notifySightingsChanged = jest.spyOn(sightingEvents, 'notifySightingsChanged');
   const screen = await render(<SightingDetailScreen />);
   await waitFor(() => expect(screen.getByLabelText('Reportar avistamento incorreto')).toBeTruthy());
 
@@ -117,8 +119,10 @@ test('confirma a exclusão do avistamento e retorna à tela anterior após suces
   await act(async () => { removeButton?.onPress?.(); });
 
   await waitFor(() => expect(mockDelete).toHaveBeenCalledWith('record-6'));
+  expect(notifySightingsChanged).toHaveBeenCalledTimes(1);
   expect(back).toHaveBeenCalledTimes(1);
   alert.mockRestore();
+  notifySightingsChanged.mockRestore();
 });
 
 test('cancelar a confirmação não exclui o avistamento', async () => {

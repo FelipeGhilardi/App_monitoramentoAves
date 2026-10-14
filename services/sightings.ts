@@ -136,7 +136,7 @@ export async function fetchSightingsPage({
 
 /** Busca somente a prévia cronológica usada na Home. */
 export async function fetchSightings(): Promise<SightingsResult> {
-  const result = await fetchSightingsPage({ limit: 5, includeUnidentified: true });
+  const result = await fetchSightingsPage({ limit: 5 });
   if (!result.success || !result.data) {
     return { success: false, message: result.message };
   }

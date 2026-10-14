@@ -19,6 +19,7 @@ interface NotificationContextValue {
   busy: boolean;
   error: string | null;
   revision: number;
+  inboxRevision: number;
   sessionRevision: number;
   synchronise: (requestPermission?: boolean) => Promise<void>;
   setPushEnabled: (enabled: boolean) => Promise<void>;
@@ -40,6 +41,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [revision, setRevision] = useState(0);
+  const [inboxRevision, setInboxRevision] = useState(0);
   const [sessionRevision, setSessionRevision] = useState(0);
   const epoch = useRef(0);
   const inboxEpoch = useRef(0);
@@ -69,6 +71,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         && inboxEpoch.current === inboxVersion && !clearing.current) {
       setUnreadCount(result.unreadCount);
       setRevision((value) => value + 1);
+      setInboxRevision((value) => value + 1);
     }
   }, []);
 
@@ -253,7 +256,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
   return (
     <NotificationContext.Provider value={{
-      userId, preferences, unreadCount, permission, registered, busy, error, revision, sessionRevision,
+      userId, preferences, unreadCount, permission, registered, busy, error, revision, inboxRevision, sessionRevision,
       synchronise, setPushEnabled, refresh, list, read, clear, reportError,
     }}>
       {children}
