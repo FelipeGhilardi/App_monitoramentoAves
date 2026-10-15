@@ -45,3 +45,20 @@ test('lista todos os valores quando o gráfico mostra apenas um recorte', async 
   expect(screen.getByText('Tucano')).toBeTruthy();
   expect(screen.getByText('2 avistamentos')).toBeTruthy();
 });
+
+test('permite rolar rótulos de intervalos de data sem sobreposição', async () => {
+  const screen = await render(
+    <ActivityChart
+      title="Visitas por período"
+      data={[
+        { label: '15/09–20/09', value: 1 },
+        { label: '21/09–26/09', value: 2 },
+      ]}
+      variant="bar"
+      scrollable
+    />
+  );
+
+  expect(screen.getByTestId('chart-scroll-container')).toBeTruthy();
+  expect(screen.getByText('15/09–20/09')).toBeTruthy();
+});

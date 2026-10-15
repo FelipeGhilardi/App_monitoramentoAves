@@ -31,6 +31,11 @@ jest.mock('expo-notifications', () => ({
   dismissAllNotificationsAsync: jest.fn(async () => undefined),
 }));
 
+jest.mock('expo-screen-orientation', () => ({
+  OrientationLock: { LANDSCAPE: 'LANDSCAPE', PORTRAIT_UP: 'PORTRAIT_UP' },
+  lockAsync: jest.fn(async () => undefined),
+}));
+
 jest.mock('react-native-safe-area-context', () =>
   jest.requireActual('react-native-safe-area-context/jest/mock').default
 );

@@ -253,6 +253,7 @@ export default function StatisticsScreen() {
                   title="Visitas por período"
                   data={dashboard!.trend}
                   variant="bar"
+                  scrollable={dashboard!.trend.some((point) => point.label.includes('–'))}
                 />
               </ChartCard>
 
