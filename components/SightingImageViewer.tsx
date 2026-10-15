@@ -41,15 +41,15 @@ export default function SightingImageViewer({
   useEffect(() => {
     if (Platform.OS === 'web') return;
     let closed = false;
-    const lockLandscape = async () => {
+    const allowRotation = async () => {
       try {
-        await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
+        await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.DEFAULT);
         if (closed) await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
       } catch {
         if (!closed) setOrientationError(true);
       }
     };
-    void lockLandscape();
+    void allowRotation();
     return () => {
       closed = true;
       void ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP)
