@@ -71,10 +71,10 @@ test('falha ao carregar a foto é explícita e permite repetir', async () => {
   expect(screen.getByTestId('full-screen-photo')).toBeTruthy();
 });
 
-test('permite paisagem apenas enquanto o visualizador está aberto', async () => {
+test('libera a rotação somente enquanto o visualizador está aberto', async () => {
   const screen = await render(<SightingImageViewer uri="https://example.test/photo.jpg" onClose={jest.fn()} />);
 
-  expect(ScreenOrientation.lockAsync).toHaveBeenCalledWith(ScreenOrientation.OrientationLock.LANDSCAPE);
+  expect(ScreenOrientation.lockAsync).toHaveBeenCalledWith(ScreenOrientation.OrientationLock.DEFAULT);
   await screen.unmount();
   expect(ScreenOrientation.lockAsync).toHaveBeenLastCalledWith(ScreenOrientation.OrientationLock.PORTRAIT_UP);
 });

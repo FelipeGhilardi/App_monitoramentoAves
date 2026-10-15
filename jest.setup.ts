@@ -32,7 +32,7 @@ jest.mock('expo-notifications', () => ({
 }));
 
 jest.mock('expo-screen-orientation', () => ({
-  OrientationLock: { LANDSCAPE: 'LANDSCAPE', PORTRAIT_UP: 'PORTRAIT_UP' },
+  OrientationLock: { DEFAULT: 'DEFAULT', PORTRAIT_UP: 'PORTRAIT_UP' },
   lockAsync: jest.fn(async () => undefined),
 }));
 
