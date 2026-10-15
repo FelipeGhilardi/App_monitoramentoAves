@@ -17,10 +17,16 @@ interface Props {
   uri: string;
   onClose: () => void;
   accessibilityLabel?: string;
+  photoIndex?: number;
+  photoCount?: number;
+  canGoPrevious?: boolean;
+  canGoNext?: boolean;
+  onChangePhoto?: (direction: -1 | 1) => void;
 }
 
 export default function SightingImageViewer({
   uri, onClose, accessibilityLabel = 'Foto do avistamento ampliada',
+  photoIndex = 0, photoCount = 1, canGoPrevious = false, canGoNext = false, onChangePhoto,
 }: Props) {
   const insets = useSafeAreaInsets();
   const [viewport, setViewport] = useState({ width: 0, height: 0 });
@@ -56,6 +62,16 @@ export default function SightingImageViewer({
         .catch((error: unknown) => console.warn('Não foi possível restaurar a orientação em retrato.', error));
     };
   }, []);
+
+  useEffect(() => {
+    scale.value = MIN_ZOOM;
+    x.value = 0;
+    y.value = 0;
+    setImageSize({ width: 0, height: 0 });
+    setImageError(false);
+    setImageAttempt(0);
+    setZoomLevel(MIN_ZOOM);
+  }, [uri]);
 
   const ratio = imageSize.width / imageSize.height;
   const fittedWidth = Number.isFinite(ratio) && ratio > 0
@@ -103,10 +119,23 @@ export default function SightingImageViewer({
       .onUpdate((event) => {
         x.value = clampOffset(initialX.value + event.translationX, fittedWidth, viewport.width, scale.value);
         y.value = clampOffset(initialY.value + event.translationY, fittedHeight, viewport.height, scale.value);
+      })
+      .onEnd((event) => {
+        const horizontalSwipe = Math.abs(event.translationX) >= 60
+          && Math.abs(event.translationX) > Math.abs(event.translationY) * 1.5;
+        if (scale.value !== MIN_ZOOM || !horizontalSwipe || !onChangePhoto) return;
+        if (event.translationX < 0 && canGoNext) {
+          runOnJS(onChangePhoto)(1);
+        } else if (event.translationX > 0 && canGoPrevious) {
+          runOnJS(onChangePhoto)(-1);
+        }
       });
 
     return Gesture.Simultaneous(pinch, pan);
-  }, [fittedWidth, fittedHeight, viewport.width, viewport.height, ready]);
+  }, [
+    fittedWidth, fittedHeight, viewport.width, viewport.height, ready,
+    canGoNext, canGoPrevious, onChangePhoto,
+  ]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: x.value }, { translateY: y.value }, { scale: scale.value }],
@@ -146,7 +175,7 @@ export default function SightingImageViewer({
             <GestureDetector gesture={gesture}>
               <Animated.View style={[styles.imageFrame, animatedStyle]}>
                 <Image
-                  key={imageAttempt}
+                  key={`${uri}:${imageAttempt}`}
                   source={{ uri }}
                   style={styles.image}
                   contentFit="contain"
@@ -177,6 +206,12 @@ export default function SightingImageViewer({
         {orientationError && (
           <Text accessibilityRole="alert" style={styles.orientationMessage}>
             Não foi possível girar a tela. A foto continua disponível em retrato.
+          </Text>
+        )}
+
+        {photoCount > 1 && (
+          <Text accessibilityLiveRegion="polite" style={styles.photoCount}>
+            {photoIndex + 1} de {photoCount}
           </Text>
         )}
 
@@ -243,6 +278,11 @@ const styles = StyleSheet.create({
     position: 'absolute', alignSelf: 'center', top: 16, maxWidth: '76%', color: theme.colors.textLight,
     backgroundColor: 'rgba(0,0,0,0.7)', borderRadius: theme.radius.sm, paddingHorizontal: theme.spacing.sm,
     paddingVertical: theme.spacing.xs, textAlign: 'center', fontSize: theme.fonts.sizes.sm,
+  },
+  photoCount: {
+    position: 'absolute', alignSelf: 'center', top: 16, color: theme.colors.textLight,
+    backgroundColor: 'rgba(0,0,0,0.7)', borderRadius: theme.radius.sm, paddingHorizontal: theme.spacing.sm,
+    paddingVertical: theme.spacing.xs, fontSize: theme.fonts.sizes.sm, fontWeight: '600',
   },
   retry: { minHeight: theme.touchTarget, justifyContent: 'center', backgroundColor: theme.colors.primary, borderRadius: theme.radius.md, paddingHorizontal: theme.spacing.md, paddingVertical: theme.spacing.sm },
   retryText: { color: theme.colors.textLight, fontSize: theme.fonts.sizes.md, fontWeight: '600' },
