@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator, Modal, Pressable, StatusBar, StyleSheet, Text, View,
+  ActivityIndicator, Modal, Platform, Pressable, StatusBar, StyleSheet, Text, View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
+import * as ScreenOrientation from 'expo-screen-orientation';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, {
   runOnJS, useAnimatedStyle, useSharedValue, withTiming,
@@ -27,6 +28,7 @@ export default function SightingImageViewer({
   const [imageError, setImageError] = useState(false);
   const [imageAttempt, setImageAttempt] = useState(0);
   const [zoomLevel, setZoomLevel] = useState(MIN_ZOOM);
+  const [orientationError, setOrientationError] = useState(false);
   const scale = useSharedValue(MIN_ZOOM);
   const x = useSharedValue(0);
   const y = useSharedValue(0);
@@ -35,6 +37,25 @@ export default function SightingImageViewer({
   const initialY = useSharedValue(0);
   const focalX = useSharedValue(0);
   const focalY = useSharedValue(0);
+
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    let closed = false;
+    const lockLandscape = async () => {
+      try {
+        await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
+        if (closed) await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+      } catch {
+        if (!closed) setOrientationError(true);
+      }
+    };
+    void lockLandscape();
+    return () => {
+      closed = true;
+      void ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP)
+        .catch((error: unknown) => console.warn('Não foi possível restaurar a orientação em retrato.', error));
+    };
+  }, []);
 
   const ratio = imageSize.width / imageSize.height;
   const fittedWidth = Number.isFinite(ratio) && ratio > 0
@@ -153,6 +174,12 @@ export default function SightingImageViewer({
           {!ready && !imageError && <ActivityIndicator style={styles.loading} color="white" />}
         </View>
 
+        {orientationError && (
+          <Text accessibilityRole="alert" style={styles.orientationMessage}>
+            Não foi possível girar a tela. A foto continua disponível em retrato.
+          </Text>
+        )}
+
         <Pressable
           onPress={onClose}
           style={[styles.close, { top: insets.top + 12 }]}
@@ -212,6 +239,11 @@ const styles = StyleSheet.create({
   zoomText: { fontSize: 16, color: 'white', minWidth: 40, textAlign: 'center' },
   message: { alignItems: 'center', gap: 16, paddingHorizontal: 24 },
   messageText: { color: theme.colors.textLight, fontSize: theme.fonts.sizes.md, textAlign: 'center' },
+  orientationMessage: {
+    position: 'absolute', alignSelf: 'center', top: 16, maxWidth: '76%', color: theme.colors.textLight,
+    backgroundColor: 'rgba(0,0,0,0.7)', borderRadius: theme.radius.sm, paddingHorizontal: theme.spacing.sm,
+    paddingVertical: theme.spacing.xs, textAlign: 'center', fontSize: theme.fonts.sizes.sm,
+  },
   retry: { minHeight: theme.touchTarget, justifyContent: 'center', backgroundColor: theme.colors.primary, borderRadius: theme.radius.md, paddingHorizontal: theme.spacing.md, paddingVertical: theme.spacing.sm },
   retryText: { color: theme.colors.textLight, fontSize: theme.fonts.sizes.md, fontWeight: '600' },
   loading: { position: 'absolute' },

@@ -1,4 +1,5 @@
 import { fireEvent, render } from '@testing-library/react-native';
+import * as ScreenOrientation from 'expo-screen-orientation';
 import SightingImageViewer from '../components/SightingImageViewer';
 
 jest.mock('expo-image', () => ({ Image: require('react-native').Image }));
@@ -68,4 +69,12 @@ test('falha ao carregar a foto é explícita e permite repetir', async () => {
   expect(screen.getByText('Não foi possível carregar a imagem.')).toBeTruthy();
   await fireEvent.press(screen.getByText('Tentar novamente'));
   expect(screen.getByTestId('full-screen-photo')).toBeTruthy();
+});
+
+test('permite paisagem apenas enquanto o visualizador está aberto', async () => {
+  const screen = await render(<SightingImageViewer uri="https://example.test/photo.jpg" onClose={jest.fn()} />);
+
+  expect(ScreenOrientation.lockAsync).toHaveBeenCalledWith(ScreenOrientation.OrientationLock.LANDSCAPE);
+  await screen.unmount();
+  expect(ScreenOrientation.lockAsync).toHaveBeenLastCalledWith(ScreenOrientation.OrientationLock.PORTRAIT_UP);
 });
