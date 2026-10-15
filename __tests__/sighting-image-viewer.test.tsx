@@ -1,4 +1,4 @@
-import { fireEvent, render } from '@testing-library/react-native';
+import { act, fireEvent, render } from '@testing-library/react-native';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import SightingImageViewer from '../components/SightingImageViewer';
 
@@ -9,16 +9,30 @@ jest.mock('react-native-safe-area-context', () => ({
 jest.mock('react-native-gesture-handler', () => {
   const React = require('react');
   const { View } = require('react-native');
-  const gesture = () => ({
-    enabled() { return this; },
-    maxPointers() { return this; },
-    onStart() { return this; },
-    onUpdate() { return this; },
-    onEnd() { return this; },
-  });
+  type MockGesture = {
+    start?: (event: unknown) => void;
+    update?: (event: unknown) => void;
+    end?: (event: { translationX: number; translationY: number }) => void;
+    enabled: () => MockGesture;
+    maxPointers: () => MockGesture;
+    onStart: (callback: (event: unknown) => void) => MockGesture;
+    onUpdate: (callback: (event: unknown) => void) => MockGesture;
+    onEnd: (callback: (event: { translationX: number; translationY: number }) => void) => MockGesture;
+  };
+  const gesture = () => {
+    const result: MockGesture = {
+      enabled: () => result,
+      maxPointers: () => result,
+      onStart: (callback) => { result.start = callback; return result; },
+      onUpdate: (callback) => { result.update = callback; return result; },
+      onEnd: (callback) => { result.end = callback; return result; },
+    };
+    return result;
+  };
   return {
-    Gesture: { Pinch: gesture, Pan: gesture, Simultaneous: jest.fn() },
-    GestureDetector: ({ children }: { children: React.ReactNode }) => React.createElement(View, null, children),
+    Gesture: { Pinch: gesture, Pan: gesture, Simultaneous: (...gestures: unknown[]) => gestures },
+    GestureDetector: ({ children, gesture }: { children: React.ReactNode; gesture: unknown }) =>
+      React.createElement(View, { testID: 'viewer-gestures', gesture }, children),
     GestureHandlerRootView: View,
   };
 });
@@ -77,4 +91,31 @@ test('libera a rotação somente enquanto o visualizador está aberto', async ()
   expect(ScreenOrientation.lockAsync).toHaveBeenCalledWith(ScreenOrientation.OrientationLock.DEFAULT);
   await screen.unmount();
   expect(ScreenOrientation.lockAsync).toHaveBeenLastCalledWith(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+});
+
+test('troca a foto ampliada com arrasto horizontal em 1×', async () => {
+  const onChangePhoto = jest.fn();
+  const screen = await render(
+    <SightingImageViewer
+      uri="https://example.test/photo.jpg"
+      onClose={jest.fn()}
+      photoIndex={0}
+      photoCount={2}
+      canGoNext
+      onChangePhoto={onChangePhoto}
+    />
+  );
+  await fireEvent(screen.getByTestId('viewer-viewport'), 'layout', {
+    nativeEvent: { layout: { width: 400, height: 800 } },
+  });
+  await fireEvent(screen.getByTestId('full-screen-photo'), 'load', {
+    source: { width: 1200, height: 800 },
+  });
+
+  const gestures = screen.getByTestId('viewer-gestures').props.gesture as { end?: (event: object) => void }[];
+  const pan = gestures[1];
+  await act(async () => { pan?.end?.({ translationX: -80, translationY: 0 }); });
+
+  expect(onChangePhoto).toHaveBeenCalledWith(1);
+  expect(screen.getByText('1 de 2')).toBeTruthy();
 });

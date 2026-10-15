@@ -148,10 +148,12 @@ export default function SightingDetailScreen() {
   const imageError = imageState?.status === 'error';
   const imageSession = photoSession.current;
 
-  const changePhoto = useCallback((direction: number) => {
-    setShowImage(false);
+  const selectPhoto = useCallback((direction: number, closeViewer: boolean) => {
+    if (closeViewer) setShowImage(false);
     setSelectedPhoto((selected) => Math.max(0, Math.min(selected + direction, photos.length - 1)));
   }, [photos.length]);
+  const changePhoto = useCallback((direction: number) => selectPhoto(direction, true), [selectPhoto]);
+  const changeExpandedPhoto = useCallback((direction: -1 | 1) => selectPhoto(direction, false), [selectPhoto]);
 
   const swipe = useMemo(() => PanResponder.create({
     onMoveShouldSetPanResponder: (_, { dx, dy }) =>
@@ -330,9 +332,13 @@ export default function SightingDetailScreen() {
 
       {showImage && imageUrl && (
         <SightingImageViewer
-          key={`${id}:${imageUrl}`}
           uri={imageUrl}
           accessibilityLabel={`Foto ${selectedPhoto + 1} de ${photos.length} do avistamento ampliada`}
+          photoIndex={selectedPhoto}
+          photoCount={photos.length}
+          canGoPrevious={selectedPhoto > 0}
+          canGoNext={selectedPhoto < photos.length - 1}
+          onChangePhoto={changeExpandedPhoto}
           onClose={() => setShowImage(false)}
         />
       )}
