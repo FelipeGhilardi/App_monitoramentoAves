@@ -1,54 +1,91 @@
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import StatisticsScreen from '../app/(tabs)/dash';
-import { fetchSightings, SightingResponse } from '../services/sightings';
+import { DashboardResponse, fetchDashboard } from '../services/dashboard';
+import { notifySightingsChanged } from '../services/sighting-events';
 
-jest.mock('../services/sightings', () => ({
-  ...jest.requireActual('../services/sightings'),
-  fetchSightings: jest.fn(),
-}));
+jest.mock('../services/dashboard', () => ({ fetchDashboard: jest.fn() }));
 
-const sightings: SightingResponse[] = ['2026-10-02', '2026-09-12', '2026-08-01'].map((date, index) => ({
-  id: `sighting-${index}`, date, time: '09:30:00', imageUrl: null, createdAt: '', updatedAt: '',
-  species: [{ id: 'bird-a', name: 'Ave sintética', scientificName: 'Avis exemplaris', description: null, tips: null, imageUrl: null, createdAt: '', updatedAt: '' }],
-}));
+const response: DashboardResponse = {
+  totalSightings: 3,
+  uniqueSpecies: 2,
+  leadingSpecies: [{ id: 'arara', name: 'Arara', count: 2 }],
+  trend: [
+    { label: '8/10', value: 0 }, { label: '9/10', value: 1 }, { label: '10/10', value: 1 },
+    { label: '11/10', value: 0 }, { label: '12/10', value: 0 }, { label: '13/10', value: 1 },
+    { label: '14/10', value: 0 },
+  ],
+  species: [
+    { id: 'arara', name: 'Arara', count: 2 },
+    { id: 'tucano', name: 'Tucano', count: 1 },
+  ],
+  hourly: Array.from({ length: 24 }, (_, hour) => ({
+    label: `${String(hour).padStart(2, '0')}h`,
+    value: hour === 9 ? 2 : hour === 15 ? 1 : 0,
+  })),
+};
+
+const mockFetchDashboard = jest.mocked(fetchDashboard);
 
 beforeEach(() => {
   jest.clearAllMocks();
-  jest.useFakeTimers();
-  jest.setSystemTime(new Date('2026-10-02T12:00:00'));
-  jest.mocked(fetchSightings).mockResolvedValue({ success: true, data: sightings });
+  mockFetchDashboard.mockResolvedValue({ success: true, data: response });
 });
 
-afterEach(() => jest.useRealTimers());
-
-test('seleciona diretamente 7, 30 e 90 dias sem alterar as métricas', async () => {
+test('oferece todos os períodos, remove novas espécies e mantém os cartões definidos', async () => {
   const screen = await render(<StatisticsScreen />);
-  await waitFor(() => expect(screen.getByLabelText(/^Total de Avistamentos: 1/)).toBeTruthy());
-  expect(screen.getByLabelText('Últimos 7 dias').props.accessibilityState.selected).toBe(true);
-  await fireEvent.press(screen.getByLabelText('Últimos 90 dias'));
-  expect(screen.getByLabelText('Últimos 90 dias').props.accessibilityState.selected).toBe(true);
-  expect(screen.getByLabelText(/^Total de Avistamentos: 3/)).toBeTruthy();
-  await fireEvent.press(screen.getByLabelText('Últimos 30 dias'));
-  expect(screen.getByLabelText(/^Total de Avistamentos: 2/)).toBeTruthy();
-  await fireEvent.press(screen.getByLabelText('Últimos 7 dias'));
-  expect(screen.getByLabelText(/^Total de Avistamentos: 1/)).toBeTruthy();
-  expect(fetchSightings).toHaveBeenCalledTimes(1);
+
+  await waitFor(() => expect(mockFetchDashboard).toHaveBeenCalledWith('7', null));
+  expect(screen.getByLabelText(/^Total de avistamentos: 3/)).toBeTruthy();
+  expect(screen.getByLabelText(/^Espécies diferentes: 2/)).toBeTruthy();
+  expect(screen.getByLabelText(/^Espécie mais avistada: Arara, 2 avistamentos/)).toBeTruthy();
+  expect(screen.queryByText(/nova espécie/i)).toBeNull();
+
+  await fireEvent.press(screen.getByLabelText('Últimos 180 dias'));
+  await waitFor(() => expect(mockFetchDashboard).toHaveBeenLastCalledWith('180', null));
+  expect(screen.getByLabelText('Últimos 180 dias').props.accessibilityState.selected).toBe(true);
+
+  await fireEvent.press(screen.getByLabelText('Todo o histórico'));
+  await waitFor(() => expect(mockFetchDashboard).toHaveBeenLastCalledWith('all', null));
 });
 
-test('o estado vazio usa o período escolhido e a atualização continua disponível', async () => {
-  jest.mocked(fetchSightings).mockResolvedValue({ success: true, data: [] });
+test('seleciona uma espécie para a frequência por hora', async () => {
   const screen = await render(<StatisticsScreen />);
-  await waitFor(() => expect(screen.getByText('Sem avistamentos no período')).toBeTruthy());
-  await fireEvent.press(screen.getByLabelText('Últimos 30 dias'));
-  expect(screen.getByText('Não há avistamentos registrados nos 30 dias selecionados. Tente outro período.')).toBeTruthy();
-  await fireEvent.press(screen.getByLabelText('Atualizar estatísticas'));
-  await waitFor(() => expect(fetchSightings).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(mockFetchDashboard).toHaveBeenCalledWith('7', null));
+
+  await fireEvent.press(screen.getByLabelText('Selecionar espécie para frequência por hora'));
+  await fireEvent.press(screen.getByLabelText('Tucano'));
+
+  await waitFor(() => expect(mockFetchDashboard).toHaveBeenLastCalledWith('7', 'tucano'));
+  expect(screen.getByLabelText('Selecionar espécie para frequência por hora').props.accessibilityValue.text)
+    .toBe('Tucano');
 });
 
-test('erros de carregamento mantêm uma ação explícita de repetição', async () => {
-  jest.mocked(fetchSightings).mockResolvedValueOnce({ success: false, message: 'Falha sintética' });
+test('atualiza as estatísticas quando avistamentos mudam', async () => {
   const screen = await render(<StatisticsScreen />);
+  await waitFor(() => expect(mockFetchDashboard).toHaveBeenCalledTimes(1));
+
+  await act(async () => { notifySightingsChanged(); });
+
+  await waitFor(() => expect(mockFetchDashboard).toHaveBeenCalledTimes(2));
+  expect(screen.getByLabelText(/^Total de avistamentos: 3/)).toBeTruthy();
+});
+
+test('explica quando o período não tem avistamentos identificados', async () => {
+  mockFetchDashboard.mockResolvedValue({
+    success: true,
+    data: { ...response, totalSightings: 0, uniqueSpecies: 0, leadingSpecies: [], trend: [], species: [] },
+  });
+  const screen = await render(<StatisticsScreen />);
+
+  await waitFor(() => expect(screen.getByText('Sem avistamentos identificados no período')).toBeTruthy());
+  expect(screen.getByText(/Não há avistamentos identificados em últimos 7 dias/i)).toBeTruthy();
+});
+
+test('mantém uma ação explícita de repetição quando o carregamento falha', async () => {
+  mockFetchDashboard.mockResolvedValueOnce({ success: false, message: 'Falha sintética' });
+  const screen = await render(<StatisticsScreen />);
+
   await waitFor(() => expect(screen.getByText('Falha sintética')).toBeTruthy());
   await fireEvent.press(screen.getByText('Tentar novamente'));
-  await waitFor(() => expect(screen.getByLabelText(/^Total de Avistamentos: 1/)).toBeTruthy());
+  await waitFor(() => expect(screen.getByLabelText(/^Total de avistamentos: 3/)).toBeTruthy());
 });

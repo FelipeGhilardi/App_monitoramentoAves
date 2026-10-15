@@ -19,10 +19,11 @@ function niceCeil(value: number): number {
 interface Props {
   title: string;
   data: ChartPoint[];
+  valuesData?: ChartPoint[];
   variant: 'bar' | 'line';
 }
 
-export default function ActivityChart({ title, data, variant }: Props) {
+export default function ActivityChart({ title, data, valuesData = data, variant }: Props) {
   const [plotWidth, setPlotWidth] = useState(0);
   const [selected, setSelected] = useState<number | null>(null);
   const [showValues, setShowValues] = useState(false);
@@ -84,7 +85,11 @@ export default function ActivityChart({ title, data, variant }: Props) {
         </View>
       </View>
       <View style={styles.xAxis}>
-        {data.map((point, index) => <Text key={index} style={styles.xLabel}>{point.label}</Text>)}
+        {data.map((point, index) => (
+          <Text key={index} style={styles.xLabel}>
+            {data.length > 12 && index % 3 !== 0 ? '' : point.label}
+          </Text>
+        ))}
       </View>
       {selected !== null && data[selected] && (
         <Text accessibilityLiveRegion="polite" style={styles.selection}>
@@ -101,7 +106,7 @@ export default function ActivityChart({ title, data, variant }: Props) {
         <Text style={styles.valuesTitle}>{showValues ? 'Ocultar valores' : 'Mostrar valores'}</Text>
         <Ionicons name={showValues ? 'chevron-up' : 'chevron-down'} size={20} color={theme.colors.primary} />
       </Pressable>
-      {showValues && data.map((point, index) => (
+      {showValues && valuesData.map((point, index) => (
         <View key={index} style={styles.valueRow}>
           <Text style={styles.valueText}>{point.label}</Text>
           <Text style={styles.valueText}>{point.value} {point.value === 1 ? 'avistamento' : 'avistamentos'}</Text>
