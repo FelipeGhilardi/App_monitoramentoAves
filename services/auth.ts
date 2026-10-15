@@ -130,19 +130,34 @@ export async function updateProfile(
  * o claim `exp`. Retorna true apenas se o token está presente e não expirou.
  */
 function isJwtUnexpired(token: string | null): boolean {
-  if (!token) return false;
+  const payload = jwtPayload(token);
+  if (!payload) return false;
+  if (typeof payload.exp !== 'number') return true;
+  return Date.now() < payload.exp * 1000;
+}
+
+function jwtSubject(token: string | null): string | null {
+  const subject = jwtPayload(token)?.sub;
+  return typeof subject === 'string' && /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(subject)
+    ? subject
+    : null;
+}
+
+function jwtPayload(token: string | null): Record<string, unknown> | null {
+  if (!token) return null;
   try {
     const parts = token.split('.');
-    if (parts.length !== 3) return false;
+    if (parts.length !== 3) return null;
 
     let payload = parts[1].replace(/-/g, '+').replace(/_/g, '/');
     while (payload.length % 4) payload += '=';
 
-    const decoded = JSON.parse(globalThis.atob(payload));
-    if (typeof decoded.exp !== 'number') return true;
-    return Date.now() < decoded.exp * 1000;
+    const decoded: unknown = JSON.parse(globalThis.atob(payload));
+    return decoded && typeof decoded === 'object' && !Array.isArray(decoded)
+      ? decoded as Record<string, unknown>
+      : null;
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -170,15 +185,18 @@ export async function getUserEmail(): Promise<string | null> {
  * Retorna null se não houver usuário logado.
  */
 export async function getCurrentUser(): Promise<UserResponse | null> {
-  const [id, name, email, createdAt, role] = await Promise.all([
+  const [storedId, name, email, createdAt, role, token] = await Promise.all([
     AsyncStorage.getItem(USER_ID_KEY),
     AsyncStorage.getItem(USER_NAME_KEY),
     AsyncStorage.getItem(USER_EMAIL_KEY),
     AsyncStorage.getItem(USER_CREATED_AT_KEY),
     AsyncStorage.getItem(USER_ROLE_KEY),
+    getToken(),
   ]);
 
+  const id = storedId ?? jwtSubject(token);
   if (!id || !email) return null;
+  if (!storedId) await AsyncStorage.setItem(USER_ID_KEY, id);
 
   return {
     id,

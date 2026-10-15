@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
-import { login, logout, isLoggedIn } from '../services/auth';
+import { getCurrentUser, login, logout, isLoggedIn } from '../services/auth';
 import { getToken, setToken } from '../services/api';
 import { deactivateNotificationDevice, registerNotificationDevice, hasPendingDeviceDeactivation } from '../services/notification-device';
 import { clearNotifications, fetchNotifications, notificationDestination } from '../services/notifications';
@@ -80,6 +80,16 @@ test('expiração limpa sessão sem tentar desativar com JWT inválido e deixa r
   expect(await getToken()).toBeNull();
   expect(await hasPendingDeviceDeactivation()).toBe(true);
   expect(mockFetch).not.toHaveBeenCalled();
+});
+
+test('recupera e persiste o ID de sessões antigas pelo subject do JWT', async () => {
+  const id = '11111111-1111-4111-8111-111111111111';
+  const legacyToken = `synthetic.${btoa(JSON.stringify({ sub: id, exp: 4102444800 }))}.synthetic`;
+  await setToken(legacyToken);
+  await AsyncStorage.setItem('userEmail', 'alice@example.test');
+
+  expect(await getCurrentUser()).toMatchObject({ id, email: 'alice@example.test' });
+  expect(await AsyncStorage.getItem('userId')).toBe(id);
 });
 
 test('logout aguarda cadastro já iniciado e desativa depois, mesmo quando a resposta de cadastro se perde', async () => {
