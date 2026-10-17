@@ -98,6 +98,7 @@ export default function HomeScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         <ScreenHeader
           title="AvistAI"
+          logo={require('../../assets/logo.png')}
           actions={<>
             <View>
               <IconButton icon="notifications-outline" label="Notificações" onPress={() => setShowNotif(true)} />
@@ -178,6 +179,6 @@ const styles = StyleSheet.create({
   sectionActions: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs },
   seeAllButton: { minHeight: theme.touchTarget, minWidth: theme.touchTarget, justifyContent: 'center', paddingHorizontal: theme.spacing.sm },
   seeAll: { color: theme.colors.primary, fontSize: theme.fonts.sizes.sm, fontWeight: '600' },
-  notifDot: { position: 'absolute', top: 2, right: 4, minWidth: 18, minHeight: 18, paddingHorizontal: 4, backgroundColor: theme.colors.danger, borderRadius: theme.radius.full, alignItems: 'center', justifyContent: 'center' },
+  notifDot: { position: 'absolute', top: 2, right: 4, minWidth: 18, minHeight: 18, paddingHorizontal: 4, backgroundColor: theme.colors.header, borderRadius: theme.radius.full, alignItems: 'center', justifyContent: 'center' },
   notifDotText: { color: theme.colors.textLight, fontSize: 10, fontWeight: '700' },
 });

@@ -19,6 +19,12 @@ test.each(['bar', 'line'] as const)('gráfico %s usa a área medida para selecio
   expect(screen.getByText('06h: 0 avistamentos')).toBeTruthy();
 });
 
+test('gráfico de linha pode ocultar os marcadores', async () => {
+  const screen = await render(<ActivityChart title="Frequência por hora" data={data} variant="line" showPoints={false} />);
+
+  expect(screen.queryByTestId('chart-point')).toBeNull();
+});
+
 test('valores completos podem ser consultados sem tocar em pontos do gráfico', async () => {
   const screen = await render(<ActivityChart title="Visitas sintéticas" data={data} variant="line" />);
   expect(screen.queryByText('2 avistamentos')).toBeNull();

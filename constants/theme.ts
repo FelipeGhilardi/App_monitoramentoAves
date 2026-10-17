@@ -1,5 +1,8 @@
 export const theme = {
   colors: {
+    header: '#F36F45',
+    headerLight: '#FDE4DB',
+    tabBarInactiveTint: '#4B5563',
     primary: '#2563EB',
     primaryDark: '#1D4ED8',
     primaryLight: '#DBEAFE',

@@ -46,11 +46,10 @@ function StatCard({
 }
 
 function ChartCard({
-  title, subtitle, icon, children,
+  title, subtitle, children,
 }: {
   title: string;
   subtitle: string;
-  icon: keyof typeof Ionicons.glyphMap;
   children: ReactNode;
 }) {
   return (
@@ -59,9 +58,6 @@ function ChartCard({
         <View style={styles.chartTitles}>
           <Text style={styles.chartTitle}>{title}</Text>
           <Text style={styles.chartSubtitle}>{subtitle}</Text>
-        </View>
-        <View style={styles.chartIcon}>
-          <Ionicons name={icon} size={20} color={theme.colors.primary} />
         </View>
       </View>
       {children}
@@ -246,7 +242,6 @@ export default function StatisticsScreen() {
               <ChartCard
                 title="Visitas por período"
                 subtitle="Tendência de avistamentos identificados"
-                icon="bar-chart-outline"
               >
                 <ActivityChart
                   key={`trend-${period}`}
@@ -262,7 +257,6 @@ export default function StatisticsScreen() {
                 subtitle={dashboard!.species.length > MAX_SPECIES_IN_CHART
                   ? `As ${MAX_SPECIES_IN_CHART} espécies mais avistadas`
                   : 'Comparação entre espécies identificadas'}
-                icon="list-outline"
               >
                 <ActivityChart
                   key={`species-${period}`}
@@ -276,7 +270,6 @@ export default function StatisticsScreen() {
               <ChartCard
                 title="Frequência por hora"
                 subtitle={selectedSpecies ? selectedSpecies.name : 'Todas as espécies identificadas'}
-                icon="time-outline"
               >
                 <Pressable
                   accessibilityRole="button"
@@ -295,6 +288,8 @@ export default function StatisticsScreen() {
                   title="Frequência por hora"
                   data={dashboard!.hourly}
                   variant="line"
+                  xLabelFontSize={theme.fonts.sizes.xs - 5}
+                  showPoints={false}
                 />
               </ChartCard>
             </>
@@ -332,7 +327,6 @@ const styles = StyleSheet.create({
   chartTitles: { flex: 1, gap: theme.spacing.xs },
   chartTitle: { fontSize: theme.fonts.sizes.lg, fontWeight: '700', color: theme.colors.textPrimary },
   chartSubtitle: { fontSize: theme.fonts.sizes.sm, color: theme.colors.textSecondary },
-  chartIcon: { width: 36, height: 36, borderRadius: theme.radius.md, backgroundColor: theme.colors.infoSurface, alignItems: 'center', justifyContent: 'center' },
   speciesSelector: { minHeight: theme.touchTarget, flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm, marginBottom: theme.spacing.md, paddingHorizontal: theme.spacing.md, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radius.md },
   speciesSelectorText: { flex: 1, color: theme.colors.textPrimary, fontSize: theme.fonts.sizes.md },
   modalContainer: { flex: 1, backgroundColor: theme.colors.background },

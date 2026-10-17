@@ -20,8 +20,8 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: theme.colors.primary,
-        tabBarInactiveTintColor: theme.colors.textSecondary,
+        tabBarActiveTintColor: theme.colors.header,
+        tabBarInactiveTintColor: theme.colors.tabBarInactiveTint,
         tabBarStyle: {
           backgroundColor: theme.colors.surface,
           borderTopColor: theme.colors.border,
@@ -50,20 +50,20 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="collection"
-        options={{
-          title: 'Coleção',
-          tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons name={focused ? 'bookmark' : 'bookmark-outline'} size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
         name="dash"
         options={{
           title: 'Estatísticas',
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons name={focused ? 'stats-chart' : 'stats-chart-outline'} size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="collection"
+        options={{
+          title: 'Coleção',
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons name={focused ? 'bookmark' : 'bookmark-outline'} size={size} color={color} />
           ),
         }}
       />

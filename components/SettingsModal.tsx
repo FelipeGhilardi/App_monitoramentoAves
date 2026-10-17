@@ -47,7 +47,7 @@ export default function SettingsModal({ visible, user, onClose, onEdit, onAbout,
             </View>
           </View>
           <Pressable accessibilityRole="button" accessibilityState={{ disabled: loggingOut, busy: loggingOut }} disabled={loggingOut} style={({ pressed }) => [styles.logout, (pressed || loggingOut) && styles.pressed]} onPress={onLogout}>
-            <Ionicons name="log-out-outline" size={22} color={theme.colors.danger} />
+            <Ionicons name="log-out-outline" size={22} color={theme.colors.header} />
             <Text style={styles.logoutText}>{loggingOut ? 'Saindo...' : 'Sair da conta'}</Text>
           </Pressable>
         </ScrollView>
@@ -66,7 +66,7 @@ const styles = StyleSheet.create({
   secondary: { fontSize: theme.fonts.sizes.sm, color: theme.colors.textSecondary, flexShrink: 1 },
   row: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md, minHeight: 64, padding: theme.spacing.md, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.colors.border },
   rowText: { flex: 1, fontSize: theme.fonts.sizes.md, color: theme.colors.textPrimary },
-  logout: { minHeight: theme.touchTarget, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: theme.spacing.sm, padding: theme.spacing.md, borderRadius: theme.radius.md, backgroundColor: theme.colors.dangerSurface },
-  logoutText: { color: theme.colors.danger, fontSize: theme.fonts.sizes.md, fontWeight: '600' },
+  logout: { minHeight: theme.touchTarget, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: theme.spacing.sm, padding: theme.spacing.md, borderRadius: theme.radius.md, backgroundColor: theme.colors.headerLight },
+  logoutText: { color: theme.colors.header, fontSize: theme.fonts.sizes.md, fontWeight: '600' },
   pressed: { opacity: 0.65 },
 });
