@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, FlatList, Pressable, Modal } from 'react-native';
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { getCurrentUser, logout, UserResponse } from '../../services/auth';
 import { fetchSightings, SightingResponse } from '../../services/sightings';
+import { subscribeToSightingChanges } from '../../services/sighting-events';
 import { theme } from '../../constants/theme';
 import { EditProfileModal, ProfileModal } from '../../components/AccountModals';
 import AppAlert from '../../components/AppAlert';
@@ -13,58 +13,19 @@ import ScreenHeader from '../../components/ScreenHeader';
 import ScreenState from '../../components/ScreenState';
 import SettingsModal from '../../components/SettingsModal';
 import SightingCard from '../../components/SightingCard';
-
-function NotificationsModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
-  return (
-    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <SafeAreaView edges={['bottom']} style={styles.container}>
-        <ScreenHeader title="Notificações" onBack={onClose} />
-        <ScrollView contentContainerStyle={styles.section}>
-          <View style={styles.notification}>
-            <Text style={styles.cardTitle}>Novo visitante!</Text>
-            <Text style={styles.bodyText}>Um Cardeal-vermelho foi visto no seu comedouro há 5 minutos.</Text>
-          </View>
-          <View style={styles.notification}>
-            <Text style={styles.cardTitle}>Bateria baixa</Text>
-            <Text style={styles.bodyText}>A câmera do comedouro principal está com 15% de bateria.</Text>
-          </View>
-        </ScrollView>
-      </SafeAreaView>
-    </Modal>
-  );
-}
-
-function AllSightingsModal({ visible, onClose, sightings, onSelect }: {
-  visible: boolean; onClose: () => void; sightings: SightingResponse[]; onSelect: (id: string) => void;
-}) {
-  return (
-    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <SafeAreaProvider testID="all-sightings-safe-area" style={styles.container}>
-        <SafeAreaView edges={['bottom']} style={styles.container}>
-          <ScreenHeader title="Todos os avistamentos" onBack={onClose} />
-          <FlatList
-            data={sightings}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={styles.section}
-            renderItem={({ item }) => <SightingCard sighting={item} onPress={() => onSelect(item.id)} />}
-            ListEmptyComponent={<ScreenState title="Nenhum avistamento ainda" message="Quando houver registros, eles aparecerão aqui." />}
-            showsVerticalScrollIndicator={false}
-          />
-        </SafeAreaView>
-      </SafeAreaProvider>
-    </Modal>
-  );
-}
+import NotificationsModal from '../../components/NotificationsModal';
+import { useNotifications } from '../../services/notification-context';
 
 export default function HomeScreen() {
   const router = useRouter();
+  const notifications = useNotifications();
   const [showNotif, setShowNotif] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [showAllSightings, setShowAllSightings] = useState(false);
   const [sightings, setSightings] = useState<SightingResponse[]>([]);
   const [loadingSightings, setLoadingSightings] = useState(true);
+  const [refreshingSightings, setRefreshingSightings] = useState(false);
   const [sightingsError, setSightingsError] = useState<string | null>(null);
   const [user, setUser] = useState<UserResponse | null>(null);
   const [accountError, setAccountError] = useState('');
@@ -81,8 +42,9 @@ export default function HomeScreen() {
     }
   }, []);
 
-  const loadSightings = useCallback(async () => {
-    setLoadingSightings(true);
+  const loadSightings = useCallback(async (refresh = false) => {
+    if (refresh) setRefreshingSightings(true);
+    else setLoadingSightings(true);
     const result = await fetchSightings();
     if (result.success && result.data) {
       setSightings(result.data);
@@ -91,8 +53,11 @@ export default function HomeScreen() {
       setSightings([]);
       setSightingsError(result.message ?? 'Erro ao carregar avistamentos.');
     }
-    setLoadingSightings(false);
+    if (refresh) setRefreshingSightings(false);
+    else setLoadingSightings(false);
   }, []);
+
+  useEffect(() => subscribeToSightingChanges(() => { void loadSightings(true); }), [loadSightings]);
 
   useEffect(() => {
     void loadUser();
@@ -125,7 +90,6 @@ export default function HomeScreen() {
   };
 
   const openSighting = (id: string) => {
-    setShowAllSightings(false);
     router.push({ pathname: '/sightings/[id]', params: { id } });
   };
 
@@ -134,15 +98,25 @@ export default function HomeScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         <ScreenHeader
           title="AvistAI"
+          logo={require('../../assets/logo.png')}
           actions={<>
             <View>
               <IconButton icon="notifications-outline" label="Notificações" onPress={() => setShowNotif(true)} />
-              <View pointerEvents="none" style={styles.notifDot}><Text style={styles.notifDotText}>1</Text></View>
+              {notifications.unreadCount > 0 && <View pointerEvents="none" style={styles.notifDot}>
+                <Text style={styles.notifDotText}>{notifications.unreadCount > 99 ? '99+' : notifications.unreadCount}</Text>
+              </View>}
             </View>
             <IconButton icon="person-outline" label="Abrir perfil" onPress={openProfile} />
             <IconButton icon="settings-outline" label="Abrir configurações" onPress={openSettings} />
           </>}
         />
+        {notifications.error && <ScreenState title="Notificações indisponíveis" message={notifications.error}
+          actionLabel="Tentar novamente" onAction={() => void notifications.synchronise()} />}
+        {(notifications.permission === 'denied' || notifications.permission === 'undetermined') && notifications.userId && (
+          <ScreenState title="Alertas de novos avistamentos"
+            message="O histórico funciona sem permissão. Ative os alertas para receber avisos no Android."
+            actionLabel="Ativar alertas" onAction={() => void notifications.synchronise(true)} />
+        )}
         <View style={styles.welcome}>
           <Image source={require('../../assets/menuImage.jpg')} style={styles.welcomeImage} contentFit="cover" />
           <View style={styles.welcomeText}>
@@ -153,11 +127,20 @@ export default function HomeScreen() {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text accessibilityRole="header" style={styles.sectionTitle}>Últimos avistamentos</Text>
-            {sightings.length > 0 && (
-              <Pressable accessibilityRole="button" style={styles.seeAllButton} onPress={() => setShowAllSightings(true)}>
-                <Text style={styles.seeAll}>Ver tudo</Text>
-              </Pressable>
-            )}
+            <View style={styles.sectionActions}>
+              <IconButton
+                icon="refresh"
+                label="Atualizar avistamentos"
+                onPress={() => void loadSightings(true)}
+                disabled={loadingSightings}
+                loading={refreshingSightings}
+              />
+              {sightings.length > 0 && (
+                <Pressable accessibilityRole="button" style={styles.seeAllButton} onPress={() => router.push('/sightings')}>
+                  <Text style={styles.seeAll}>Ver tudo</Text>
+                </Pressable>
+              )}
+            </View>
           </View>
           {loadingSightings ? <ScreenState loading title="Carregando avistamentos..." /> : sightingsError ? (
             <ScreenState title="Não foi possível carregar" message={sightingsError} icon="cloud-offline-outline" actionLabel="Tentar novamente" onAction={loadSightings} />
@@ -177,7 +160,6 @@ export default function HomeScreen() {
         onAbout={() => { setShowSettings(false); router.navigate('/(tabs)/camera'); }}
         onLogout={handleLogout} loggingOut={loggingOut}
       />
-      <AllSightingsModal visible={showAllSightings} onClose={() => setShowAllSightings(false)} sightings={sightings} onSelect={openSighting} />
       <AppAlert visible={Boolean(accountError)} title="Erro na conta" message={accountError} onClose={() => setAccountError('')} />
     </View>
   );
@@ -194,10 +176,9 @@ const styles = StyleSheet.create({
   section: { padding: theme.spacing.md, gap: theme.spacing.md },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm },
   sectionTitle: { flex: 1, color: theme.colors.textPrimary, fontSize: theme.fonts.sizes.lg, fontWeight: '700' },
+  sectionActions: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs },
   seeAllButton: { minHeight: theme.touchTarget, minWidth: theme.touchTarget, justifyContent: 'center', paddingHorizontal: theme.spacing.sm },
   seeAll: { color: theme.colors.primary, fontSize: theme.fonts.sizes.sm, fontWeight: '600' },
-  notification: { padding: theme.spacing.md, gap: theme.spacing.sm, backgroundColor: theme.colors.surface, borderRadius: theme.radius.lg },
-  cardTitle: { fontSize: theme.fonts.sizes.md, fontWeight: '600', color: theme.colors.textPrimary },
-  notifDot: { position: 'absolute', top: 2, right: 4, minWidth: 18, minHeight: 18, paddingHorizontal: 4, backgroundColor: theme.colors.danger, borderRadius: theme.radius.full, alignItems: 'center', justifyContent: 'center' },
+  notifDot: { position: 'absolute', top: 2, right: 4, minWidth: 18, minHeight: 18, paddingHorizontal: 4, backgroundColor: theme.colors.header, borderRadius: theme.radius.full, alignItems: 'center', justifyContent: 'center' },
   notifDotText: { color: theme.colors.textLight, fontSize: 10, fontWeight: '700' },
 });

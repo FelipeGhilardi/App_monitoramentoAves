@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View,
+  ActivityIndicator, Alert, PanResponder, Pressable, ScrollView, StyleSheet, Text, View,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,12 +9,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import SightingImageViewer from '../../components/SightingImageViewer';
 import ScreenHeader from '../../components/ScreenHeader';
 import { theme } from '../../constants/theme';
-import { isLoggedIn } from '../../services/auth';
+import { getCurrentUser, isLoggedIn } from '../../services/auth';
+import { notifySightingsChanged } from '../../services/sighting-events';
 import {
-  fetchSightingById, formatSightingDate, getSightingTitle, SightingResponse,
+  deleteSighting, fetchSightingById, formatSightingDate, getSightingImageUrls, getSightingTitle, SightingResponse,
 } from '../../services/sightings';
 
 type PageStatus = 'loading' | 'ready' | 'unauthorized' | 'not-found' | 'error';
+type PhotoState = { status: 'loading' | 'loaded' | 'error'; attempt: number };
 const NOT_FOUND_RECHECK_DELAY_MS = 500;
 
 export default function SightingDetailScreen() {
@@ -25,20 +27,31 @@ export default function SightingDetailScreen() {
   const [sighting, setSighting] = useState<SightingResponse | null>(null);
   const [error, setError] = useState('');
   const [retryCount, setRetryCount] = useState(0);
-  const [imageAttempt, setImageAttempt] = useState(0);
-  const [imageLoaded, setImageLoaded] = useState(false);
-  const [imageError, setImageError] = useState(false);
+  const [selectedPhoto, setSelectedPhoto] = useState(0);
+  const [photoStates, setPhotoStates] = useState<Record<string, PhotoState>>({});
   const [showImage, setShowImage] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [canDelete, setCanDelete] = useState(false);
+  const photoSession = useRef(0);
 
   useEffect(() => {
+    let active = true;
+    void getCurrentUser().then((user) => {
+      if (active) setCanDelete(user?.role === 'ADMIN');
+    });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    photoSession.current += 1;
     let active = true;
     let recheckedNotFound = false;
     let recheckTimer: ReturnType<typeof setTimeout> | undefined;
     setStatus('loading');
     setSighting(null);
     setError('');
-    setImageLoaded(false);
-    setImageError(false);
+    setSelectedPhoto(0);
+    setPhotoStates({});
     setShowImage(false);
 
     const load = async () => {
@@ -84,6 +97,7 @@ export default function SightingDetailScreen() {
 
     void load();
     return () => {
+      photoSession.current += 1;
       active = false;
       clearTimeout(recheckTimer);
     };
@@ -94,7 +108,79 @@ export default function SightingDetailScreen() {
     else router.replace('/(tabs)');
   };
 
-  const imageUrl = sighting?.imageUrl?.trim() || null;
+  const removeSighting = async () => {
+    if (!sighting || deleting) return;
+
+    setDeleting(true);
+    const result = await deleteSighting(sighting.id);
+    setDeleting(false);
+
+    if (result.success) {
+      notifySightingsChanged();
+      goBack();
+      return;
+    }
+
+    Alert.alert(
+      'Não foi possível excluir',
+      result.message ?? 'Não foi possível excluir o avistamento. Tente novamente.'
+    );
+  };
+
+  const confirmIncorrectSighting = () => {
+    if (!sighting || deleting) return;
+
+    Alert.alert(
+      'Reportar avistamento incorreto',
+      'Este avistamento será removido permanentemente. Deseja continuar?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Excluir avistamento', style: 'destructive', onPress: () => void removeSighting() },
+      ]
+    );
+  };
+
+  const photos = sighting ? getSightingImageUrls(sighting) : [];
+  const imageUrl = photos[selectedPhoto] ?? null;
+  const imageState = imageUrl ? photoStates[imageUrl] : undefined;
+  const imageAttempt = imageState?.attempt ?? 0;
+  const imageLoaded = imageState?.status === 'loaded';
+  const imageError = imageState?.status === 'error';
+  const imageSession = photoSession.current;
+
+  const selectPhoto = useCallback((direction: number, closeViewer: boolean) => {
+    if (closeViewer) setShowImage(false);
+    setSelectedPhoto((selected) => Math.max(0, Math.min(selected + direction, photos.length - 1)));
+  }, [photos.length]);
+  const changePhoto = useCallback((direction: number) => selectPhoto(direction, true), [selectPhoto]);
+  const changeExpandedPhoto = useCallback((direction: -1 | 1) => selectPhoto(direction, false), [selectPhoto]);
+
+  const swipe = useMemo(() => PanResponder.create({
+    onMoveShouldSetPanResponder: (_, { dx, dy }) =>
+      photos.length > 1 && Math.abs(dx) > 12 && Math.abs(dx) > Math.abs(dy) * 1.5,
+    onPanResponderRelease: (_, { dx }) => {
+      if (Math.abs(dx) >= 40) changePhoto(dx < 0 ? 1 : -1);
+    },
+  }), [photos.length, changePhoto]);
+
+  const updatePhotoStatus = (nextStatus: PhotoState['status']) => {
+    if (!imageUrl) return;
+    setPhotoStates((states) => {
+      if (photoSession.current !== imageSession || (states[imageUrl]?.attempt ?? 0) !== imageAttempt) return states;
+      return { ...states, [imageUrl]: { status: nextStatus, attempt: imageAttempt } };
+    });
+  };
+
+  const retryPhoto = () => {
+    if (!imageUrl) return;
+    setPhotoStates((states) => {
+      if (photoSession.current !== imageSession) return states;
+      return {
+        ...states,
+        [imageUrl]: { status: 'loading', attempt: (states[imageUrl]?.attempt ?? 0) + 1 },
+      };
+    });
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -142,44 +228,83 @@ export default function SightingDetailScreen() {
             <Text style={styles.date}>{formatSightingDate(sighting)}</Text>
           </View>
 
-          {imageUrl && !imageError ? (
-            <Pressable
-              style={styles.photoFrame}
-              onPress={() => setShowImage(true)}
-              disabled={!imageLoaded}
-              accessibilityRole="button"
-              accessibilityLabel="Ampliar foto do avistamento"
-            >
-              <Image
-                key={imageAttempt}
-                source={{ uri: imageUrl }}
-                style={styles.photo}
-                contentFit="contain"
-                testID="sighting-photo"
-                accessibilityLabel="Foto do avistamento"
-                onLoad={() => setImageLoaded(true)}
-                onError={() => { setImageLoaded(false); setImageError(true); }}
-              />
-              {!imageLoaded && <ActivityIndicator color={theme.colors.primary} style={styles.photoLoading} />}
-              {imageLoaded && <Text style={styles.photoHint}>Toque para ampliar</Text>}
-            </Pressable>
-          ) : (
-            <View style={styles.placeholder}>
-              <Ionicons name="image-outline" size={36} color={theme.colors.textSecondary} />
-              <Text style={styles.placeholderText}>
-                {imageError ? 'Não foi possível carregar a imagem do registro.' : 'Sem imagem do registro'}
-              </Text>
-              {imageError && (
-                <Pressable
-                  onPress={() => { setImageLoaded(false); setImageError(false); setImageAttempt((n) => n + 1); }}
-                  accessibilityRole="button"
-                  style={styles.action}
+          <View {...swipe.panHandlers} testID="sighting-gallery">
+            {imageUrl && !imageError ? (
+              <Pressable
+                style={styles.photoFrame}
+                onPress={() => setShowImage(true)}
+                disabled={!imageLoaded}
+                accessibilityRole="button"
+                accessibilityLabel="Ampliar foto do avistamento"
+                accessibilityHint={`Foto ${selectedPhoto + 1} de ${photos.length}. Abre o visualizador com zoom.`}
+              >
+                <Image
+                  key={`${id}:${imageUrl}:${imageAttempt}`}
+                  source={{ uri: imageUrl }}
+                  recyclingKey={imageUrl}
+                  style={styles.photo}
+                  contentFit="contain"
+                  testID="sighting-photo"
+                  accessibilityLabel={`Foto ${selectedPhoto + 1} de ${photos.length} do avistamento`}
+                  onLoad={() => updatePhotoStatus('loaded')}
+                  onError={() => updatePhotoStatus('error')}
+                />
+                {!imageLoaded && <ActivityIndicator color={theme.colors.primary} style={styles.photoLoading} />}
+                {imageLoaded && <Text style={styles.photoHint}>Toque para ampliar</Text>}
+              </Pressable>
+            ) : (
+              <View style={styles.placeholder}>
+                <Ionicons name="image-outline" size={36} color={theme.colors.textSecondary} />
+                <Text style={styles.placeholderText}>
+                  {imageError ? 'Não foi possível carregar a imagem do registro.' : 'Sem imagem do registro'}
+                </Text>
+                {imageError && (
+                  <Pressable
+                    onPress={retryPhoto}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Tentar novamente foto ${selectedPhoto + 1}`}
+                    style={styles.action}
+                  >
+                    <Text style={styles.actionText}>Tentar novamente</Text>
+                  </Pressable>
+                )}
+              </View>
+            )}
+
+            {photos.length > 0 && (
+              <View style={styles.galleryControls}>
+                {photos.length > 1 && (
+                  <Pressable
+                    onPress={() => changePhoto(-1)}
+                    disabled={selectedPhoto === 0}
+                    accessibilityRole="button"
+                    accessibilityLabel="Foto anterior"
+                    style={[styles.galleryButton, selectedPhoto === 0 && styles.disabled]}
+                  >
+                    <Ionicons name="chevron-back" size={24} color={theme.colors.primary} />
+                  </Pressable>
+                )}
+                <Text
+                  style={styles.galleryCount}
+                  accessibilityLabel={`Foto ${selectedPhoto + 1} de ${photos.length}`}
+                  accessibilityLiveRegion="polite"
                 >
-                  <Text style={styles.actionText}>Tentar novamente</Text>
-                </Pressable>
-              )}
-            </View>
-          )}
+                  {selectedPhoto + 1} de {photos.length}
+                </Text>
+                {photos.length > 1 && (
+                  <Pressable
+                    onPress={() => changePhoto(1)}
+                    disabled={selectedPhoto === photos.length - 1}
+                    accessibilityRole="button"
+                    accessibilityLabel="Próxima foto"
+                    style={[styles.galleryButton, selectedPhoto === photos.length - 1 && styles.disabled]}
+                  >
+                    <Ionicons name="chevron-forward" size={24} color={theme.colors.primary} />
+                  </Pressable>
+                )}
+              </View>
+            )}
+          </View>
 
           <Text style={styles.sectionTitle}>Espécies identificadas</Text>
           {sighting.species.length > 0 ? sighting.species.map((species) => (
@@ -188,10 +313,35 @@ export default function SightingDetailScreen() {
               <Text style={styles.scientificName}>{species.scientificName}</Text>
             </View>
           )) : <Text style={styles.date}>Nenhuma espécie informada.</Text>}
+
+          {canDelete && (
+            <Pressable
+              onPress={confirmIncorrectSighting}
+              disabled={deleting}
+              accessibilityRole="button"
+              accessibilityLabel="Reportar avistamento incorreto"
+              accessibilityState={{ disabled: deleting, busy: deleting }}
+              style={({ pressed }) => [styles.reportButton, (pressed || deleting) && styles.reportButtonPressed]}
+            >
+              <Ionicons name="flag-outline" size={20} color={theme.colors.danger} />
+              <Text style={styles.reportButtonText}>{deleting ? 'Excluindo avistamento...' : 'Reportar avistamento incorreto'}</Text>
+            </Pressable>
+          )}
         </ScrollView>
       )}
 
-      {showImage && imageUrl && <SightingImageViewer uri={imageUrl} onClose={() => setShowImage(false)} />}
+      {showImage && imageUrl && (
+        <SightingImageViewer
+          uri={imageUrl}
+          accessibilityLabel={`Foto ${selectedPhoto + 1} de ${photos.length} do avistamento ampliada`}
+          photoIndex={selectedPhoto}
+          photoCount={photos.length}
+          canGoPrevious={selectedPhoto > 0}
+          canGoNext={selectedPhoto < photos.length - 1}
+          onChangePhoto={changeExpandedPhoto}
+          onClose={() => setShowImage(false)}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -211,6 +361,10 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   photo: { width: '100%', height: '100%' },
+  galleryControls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: theme.spacing.md, marginTop: theme.spacing.sm },
+  galleryButton: { width: theme.touchTarget, height: theme.touchTarget, borderRadius: theme.radius.md, backgroundColor: theme.colors.surface, alignItems: 'center', justifyContent: 'center' },
+  galleryCount: { color: theme.colors.textSecondary, fontSize: theme.fonts.sizes.md, flexShrink: 1, textAlign: 'center' },
+  disabled: { opacity: 0.4 },
   photoLoading: { position: 'absolute' },
   photoHint: {
     position: 'absolute', bottom: 12, color: theme.colors.textLight, backgroundColor: 'rgba(0,0,0,0.6)', fontSize: theme.fonts.sizes.sm,
@@ -227,4 +381,10 @@ const styles = StyleSheet.create({
   },
   speciesName: { fontSize: theme.fonts.sizes.md, fontWeight: '600', color: theme.colors.textPrimary },
   scientificName: { fontSize: theme.fonts.sizes.sm, color: theme.colors.textSecondary, fontStyle: 'italic' },
+  reportButton: {
+    minHeight: theme.touchTarget, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: theme.spacing.sm,
+    borderWidth: 1, borderColor: theme.colors.danger, borderRadius: theme.radius.md, marginTop: theme.spacing.lg, paddingHorizontal: theme.spacing.md,
+  },
+  reportButtonPressed: { opacity: 0.6 },
+  reportButtonText: { color: theme.colors.danger, fontSize: theme.fonts.sizes.md, fontWeight: '600' },
 });

@@ -118,7 +118,7 @@ const styles = StyleSheet.create({
   email: { color: theme.colors.textSecondary, fontSize: theme.fonts.sizes.md, lineHeight: 24 },
   button: { minHeight: theme.touchTarget, backgroundColor: theme.colors.primary, borderRadius: theme.radius.md, padding: theme.spacing.md, alignItems: 'center', justifyContent: 'center' },
   buttonText: { color: theme.colors.textLight, fontSize: theme.fonts.sizes.md, fontWeight: '600' },
-  dangerButton: { minHeight: theme.touchTarget, backgroundColor: theme.colors.dangerSurface, borderRadius: theme.radius.md, padding: theme.spacing.md, alignItems: 'center', justifyContent: 'center' },
-  dangerText: { color: theme.colors.danger, fontSize: theme.fonts.sizes.md, fontWeight: '600' },
+  dangerButton: { minHeight: theme.touchTarget, backgroundColor: theme.colors.headerLight, borderRadius: theme.radius.md, padding: theme.spacing.md, alignItems: 'center', justifyContent: 'center' },
+  dangerText: { color: theme.colors.header, fontSize: theme.fonts.sizes.md, fontWeight: '600' },
   disabled: { opacity: 0.6 },
 });

@@ -11,14 +11,26 @@ export interface SightingResponse {
   date: string;
   time: string;
   imageUrl: string | null;
+  imageUrls?: string[];
   createdAt: string;
   updatedAt: string;
 }
 
-interface CursorPage<T> {
+export interface CursorPage<T> {
   items: T[];
   nextCursor: string | null;
   hasMore: boolean;
+}
+
+export type SightingsSort = 'newest' | 'oldest' | 'species_asc' | 'species_desc';
+
+export interface SightingsPageOptions {
+  cursor?: string | null;
+  date?: string;
+  speciesId?: string | null;
+  includeUnidentified?: boolean;
+  sort?: SightingsSort;
+  limit?: number;
 }
 
 export interface SightingsResult {
@@ -27,9 +39,21 @@ export interface SightingsResult {
   message?: string;
 }
 
+export interface SightingsPageResult {
+  success: boolean;
+  data?: CursorPage<SightingResponse>;
+  message?: string;
+}
+
 export interface SightingDetailResult {
   success: boolean;
   data?: SightingResponse;
+  status?: number;
+  message?: string;
+}
+
+export interface SightingDeletionResult {
+  success: boolean;
   status?: number;
   message?: string;
 }
@@ -55,46 +79,52 @@ export async function fetchSightingById(id: string): Promise<SightingDetailResul
   }
 }
 
-// Limite máximo de itens por página aceito pelo backend (app.sightings.max-page-size).
-const PAGE_LIMIT = 50;
-// Número máximo de páginas percorridas em uma única chamada, para evitar
-// requisições ilimitadas caso o backend acumule muito histórico.
-const MAX_PAGES = 20;
+export async function deleteSighting(id: string): Promise<SightingDeletionResult> {
+  if (!id.trim()) {
+    return { success: false, status: 400, message: 'Avistamento inválido.' };
+  }
+
+  try {
+    await apiFetch<void>(`/api/sightings/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    return { success: true };
+  } catch (err) {
+    const apiErr = err as ApiError;
+    return {
+      success: false,
+      status: apiErr.status,
+      message: apiErr.message ?? 'Não foi possível excluir o avistamento.',
+    };
+  }
+}
 
 /**
- * Busca avistamentos do backend (percorrendo páginas via cursor até o limite
- * de segurança definido acima) e retorna já ordenados do mais recente para
- * o mais antigo (por data/hora de ocorrência).
+ * Busca uma página de avistamentos. O cursor retornado só pode ser reutilizado
+ * com a mesma combinação de filtros e ordenação.
  */
-export async function fetchSightings(): Promise<SightingsResult> {
+export async function fetchSightingsPage({
+  cursor,
+  date,
+  speciesId,
+  includeUnidentified = false,
+  sort = 'newest',
+  limit = 50,
+}: SightingsPageOptions = {}): Promise<SightingsPageResult> {
   try {
-    const all: SightingResponse[] = [];
-    let cursor: string | null = null;
-    let hasMore = true;
-    let pages = 0;
-
-    while (hasMore && pages < MAX_PAGES) {
-      const query = new URLSearchParams({ limit: String(PAGE_LIMIT) });
-      if (cursor) query.set('cursor', cursor);
-
-      const page = await apiFetch<CursorPage<SightingResponse>>(
-        `/api/sightings?${query.toString()}`,
-        { method: 'GET' }
-      );
-
-      all.push(...page.items);
-      cursor = page.nextCursor;
-      hasMore = page.hasMore && !!cursor;
-      pages += 1;
+    const safeLimit = Number.isFinite(limit) ? Math.min(Math.max(Math.trunc(limit), 1), 50) : 50;
+    const query = new URLSearchParams({ limit: String(safeLimit), sort });
+    if (cursor) query.set('cursor', cursor);
+    if (date) {
+      query.set('from', date);
+      query.set('to', date);
     }
+    if (speciesId) query.set('speciesId', speciesId);
+    if (includeUnidentified) query.set('includeUnidentified', 'true');
 
-    const sorted = [...all].sort((a, b) => {
-      const dateA = combineDateTime(a.date, a.time);
-      const dateB = combineDateTime(b.date, b.time);
-      return dateB - dateA;
-    });
-
-    return { success: true, data: sorted };
+    const data = await apiFetch<CursorPage<SightingResponse>>(
+      `/api/sightings?${query.toString()}`,
+      { method: 'GET' }
+    );
+    return { success: true, data };
   } catch (err) {
     const apiErr = err as ApiError;
     return {
@@ -104,11 +134,19 @@ export async function fetchSightings(): Promise<SightingsResult> {
   }
 }
 
-function combineDateTime(date: string, time: string): number {
-  const safeTime = time && time.length >= 5 ? time : '00:00:00';
-  const iso = `${date}T${safeTime.length === 5 ? `${safeTime}:00` : safeTime}`;
-  const parsed = new Date(iso).getTime();
-  return Number.isNaN(parsed) ? 0 : parsed;
+/** Busca somente a prévia cronológica usada na Home. */
+export async function fetchSightings(): Promise<SightingsResult> {
+  const result = await fetchSightingsPage({ limit: 5 });
+  if (!result.success || !result.data) {
+    return { success: false, message: result.message };
+  }
+  return { success: true, data: result.data.items };
+}
+
+export function getSightingImageUrls(sighting: SightingResponse): string[] {
+  if (sighting.imageUrls !== undefined) return sighting.imageUrls;
+  const legacyImage = sighting.imageUrl?.trim();
+  return legacyImage ? [legacyImage] : [];
 }
 
 /**

@@ -1,5 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { apiFetch, clearToken, getToken, setToken, ApiError } from './api';
+import { beginNotificationLogout, deactivateNotificationDevice, endNotificationLogout, markDeviceDeactivationPending } from './notification-device';
+import { sessionChanged } from './session-events';
 
 export interface UserResponse {
   id: string;
@@ -7,6 +9,7 @@ export interface UserResponse {
   email: string;
   createdAt: string;
   updatedAt: string;
+  role?: 'USER' | 'ADMIN';
 }
 
 interface LoginResponse {
@@ -18,6 +21,7 @@ const USER_NAME_KEY = 'userName';
 const USER_EMAIL_KEY = 'userEmail';
 const USER_ID_KEY = 'userId';
 const USER_CREATED_AT_KEY = 'userCreatedAt';
+const USER_ROLE_KEY = 'userRole';
 
 export interface AuthResult {
   success: boolean;
@@ -58,6 +62,7 @@ export async function login(email: string, password: string): Promise<AuthResult
       await AsyncStorage.setItem(USER_EMAIL_KEY, email);
     }
 
+    sessionChanged();
     return { success: true };
   } catch (err) {
     const apiErr = err as ApiError;
@@ -66,13 +71,33 @@ export async function login(email: string, password: string): Promise<AuthResult
 }
 
 export async function logout(): Promise<void> {
+  beginNotificationLogout();
+  try {
+    const token = await getToken();
+    if (token && isJwtUnexpired(token)) await deactivateNotificationDevice(token);
+    else await markDeviceDeactivationPending();
+    await clearSession();
+  } finally { endNotificationLogout(); }
+}
+
+export async function expireSession(): Promise<void> {
+  beginNotificationLogout();
+  try {
+    await markDeviceDeactivationPending();
+    await clearSession();
+  } finally { endNotificationLogout(); }
+}
+
+async function clearSession(): Promise<void> {
   await clearToken();
   await AsyncStorage.multiRemove([
     USER_NAME_KEY,
     USER_EMAIL_KEY,
     USER_ID_KEY,
     USER_CREATED_AT_KEY,
+    USER_ROLE_KEY,
   ]);
+  sessionChanged();
 }
 
 /**
@@ -105,19 +130,34 @@ export async function updateProfile(
  * o claim `exp`. Retorna true apenas se o token está presente e não expirou.
  */
 function isJwtUnexpired(token: string | null): boolean {
-  if (!token) return false;
+  const payload = jwtPayload(token);
+  if (!payload) return false;
+  if (typeof payload.exp !== 'number') return true;
+  return Date.now() < payload.exp * 1000;
+}
+
+function jwtSubject(token: string | null): string | null {
+  const subject = jwtPayload(token)?.sub;
+  return typeof subject === 'string' && /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(subject)
+    ? subject
+    : null;
+}
+
+function jwtPayload(token: string | null): Record<string, unknown> | null {
+  if (!token) return null;
   try {
     const parts = token.split('.');
-    if (parts.length !== 3) return false;
+    if (parts.length !== 3) return null;
 
     let payload = parts[1].replace(/-/g, '+').replace(/_/g, '/');
     while (payload.length % 4) payload += '=';
 
-    const decoded = JSON.parse(globalThis.atob(payload));
-    if (typeof decoded.exp !== 'number') return true;
-    return Date.now() < decoded.exp * 1000;
+    const decoded: unknown = JSON.parse(globalThis.atob(payload));
+    return decoded && typeof decoded === 'object' && !Array.isArray(decoded)
+      ? decoded as Record<string, unknown>
+      : null;
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -127,7 +167,7 @@ export async function isLoggedIn(): Promise<boolean> {
   if (isJwtUnexpired(token)) return true;
 
   // Token presente mas expirado/inválido -> limpa para evitar tentativas autenticadas inúteis.
-  await logout();
+  await expireSession();
   return false;
 }
 
@@ -145,14 +185,18 @@ export async function getUserEmail(): Promise<string | null> {
  * Retorna null se não houver usuário logado.
  */
 export async function getCurrentUser(): Promise<UserResponse | null> {
-  const [id, name, email, createdAt] = await Promise.all([
+  const [storedId, name, email, createdAt, role, token] = await Promise.all([
     AsyncStorage.getItem(USER_ID_KEY),
     AsyncStorage.getItem(USER_NAME_KEY),
     AsyncStorage.getItem(USER_EMAIL_KEY),
     AsyncStorage.getItem(USER_CREATED_AT_KEY),
+    AsyncStorage.getItem(USER_ROLE_KEY),
+    getToken(),
   ]);
 
+  const id = storedId ?? jwtSubject(token);
   if (!id || !email) return null;
+  if (!storedId) await AsyncStorage.setItem(USER_ID_KEY, id);
 
   return {
     id,
@@ -160,6 +204,7 @@ export async function getCurrentUser(): Promise<UserResponse | null> {
     email,
     createdAt: createdAt ?? '',
     updatedAt: '',
+    role: role === 'ADMIN' ? 'ADMIN' : 'USER',
   };
 }
 
@@ -169,5 +214,6 @@ async function storeUser(user: UserResponse): Promise<void> {
     [USER_NAME_KEY, user.name],
     [USER_EMAIL_KEY, user.email],
     [USER_CREATED_AT_KEY, user.createdAt ?? ''],
+    [USER_ROLE_KEY, user.role === 'ADMIN' ? 'ADMIN' : 'USER'],
   ]);
 }

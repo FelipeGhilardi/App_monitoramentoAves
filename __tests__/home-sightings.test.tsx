@@ -1,11 +1,12 @@
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import HomeScreen from '../app/(tabs)/index';
 import { getCurrentUser, logout, updateProfile, UserResponse } from '../services/auth';
 import appConfig from '../app.json';
-import { theme } from '../constants/theme';
 import { fetchSightings, SightingResponse } from '../services/sightings';
+import { notifySightingsChanged } from '../services/sighting-events';
+import { NotificationProvider } from '../services/notification-context';
 
 jest.mock('expo-image', () => ({ Image: require('react-native').Image }));
 jest.mock('expo-router', () => ({ useRouter: jest.fn() }));
@@ -40,7 +41,7 @@ const renderHome = () => render(
     frame: { x: 0, y: 0, width: 360, height: 800 },
     insets: { top: 24, right: 0, bottom: 16, left: 0 },
   }}>
-    <HomeScreen />
+    <NotificationProvider><HomeScreen /></NotificationProvider>
   </SafeAreaProvider>
 );
 
@@ -128,37 +129,40 @@ test('o cartão da Home navega para o detalhe e o botão de vídeo não existe',
   expect(screen.queryByText('Acessar câmera ao vivo')).toBeNull();
 });
 
-test('Ver tudo usa a área segura do modal e navega para além dos cinco recentes', async () => {
+test('Ver tudo abre a página de avistamentos', async () => {
   const screen = await renderHome();
   await waitFor(() => expect(screen.getByText('Ver tudo')).toBeTruthy());
-  expect(screen.queryByText('Todos os avistamentos')).toBeNull();
   await fireEvent.press(screen.getByText('Ver tudo'));
-  expect(screen.getByText('Todos os avistamentos')).toBeTruthy();
-  const modalArea = screen.getByTestId('all-sightings-safe-area');
-  expect(modalArea).toHaveStyle({ flex: 1 });
-  await fireEvent(modalArea, 'insetsChange', {
-    nativeEvent: {
-      frame: { x: 0, y: 0, width: 360, height: 760 },
-      insets: { top: 0, right: 0, bottom: 0, left: 0 },
-    },
-  });
-  const modalHeader = screen.getByText('Todos os avistamentos').parent?.parent?.parent;
-  expect(modalHeader).toHaveStyle({ paddingTop: theme.spacing.sm });
-  await fireEvent.press(screen.getByLabelText('Ver avistamento: Ave 6'));
-  expect(push).toHaveBeenCalledWith({ pathname: '/sightings/[id]', params: { id: 'id-6' } });
-  expect(screen.queryByText('Todos os avistamentos')).toBeNull();
+  expect(push).toHaveBeenCalledWith('/sightings');
 });
 
-test('Ver tudo pode ser fechado e reaberto sem perder a lista', async () => {
+test('Home mantém apenas os cinco avistamentos da prévia', async () => {
   const screen = await renderHome();
   await waitFor(() => expect(screen.getByText('Ver tudo')).toBeTruthy());
-  await fireEvent.press(screen.getByText('Ver tudo'));
-  expect(screen.getByLabelText('Ver avistamento: Ave 6')).toBeTruthy();
-  await fireEvent.press(screen.getByLabelText('Voltar'));
-  expect(screen.queryByText('Todos os avistamentos')).toBeNull();
   expect(screen.queryByLabelText('Ver avistamento: Ave 6')).toBeNull();
-  await fireEvent.press(screen.getByText('Ver tudo'));
-  expect(screen.getByText('Todos os avistamentos')).toBeTruthy();
-  expect(screen.getByLabelText('Ver avistamento: Ave 6')).toBeTruthy();
   expect(mockFetch).toHaveBeenCalledTimes(1);
+});
+
+test('atualiza a prévia de avistamentos pelo botão de refresh', async () => {
+  const refreshed = [{ ...sightings[0], id: 'updated-id' }];
+  mockFetch.mockResolvedValueOnce({ success: true, data: sightings }).mockResolvedValueOnce({ success: true, data: refreshed });
+  const screen = await renderHome();
+  await waitFor(() => expect(screen.getByLabelText('Ver avistamento: Ave 1')).toBeTruthy());
+
+  await fireEvent.press(screen.getByLabelText('Atualizar avistamentos'));
+
+  await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(screen.getByLabelText('Atualizar avistamentos').props.accessibilityState.busy).toBe(false));
+});
+
+test('atualiza a prévia automaticamente após remover um avistamento', async () => {
+  const refreshed = [{ ...sightings[0], id: 'updated-id' }];
+  mockFetch.mockResolvedValueOnce({ success: true, data: sightings }).mockResolvedValueOnce({ success: true, data: refreshed });
+  const screen = await renderHome();
+  await waitFor(() => expect(screen.getByLabelText('Ver avistamento: Ave 1')).toBeTruthy());
+
+  await act(async () => { notifySightingsChanged(); });
+
+  await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(screen.getByLabelText('Atualizar avistamentos').props.accessibilityState.busy).toBe(false));
 });

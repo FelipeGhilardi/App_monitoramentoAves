@@ -19,6 +19,12 @@ test.each(['bar', 'line'] as const)('gráfico %s usa a área medida para selecio
   expect(screen.getByText('06h: 0 avistamentos')).toBeTruthy();
 });
 
+test('gráfico de linha pode ocultar os marcadores', async () => {
+  const screen = await render(<ActivityChart title="Frequência por hora" data={data} variant="line" showPoints={false} />);
+
+  expect(screen.queryByTestId('chart-point')).toBeNull();
+});
+
 test('valores completos podem ser consultados sem tocar em pontos do gráfico', async () => {
   const screen = await render(<ActivityChart title="Visitas sintéticas" data={data} variant="line" />);
   expect(screen.queryByText('2 avistamentos')).toBeNull();
@@ -28,4 +34,37 @@ test('valores completos podem ser consultados sem tocar em pontos do gráfico', 
   expect(screen.getByText('1 avistamento')).toBeTruthy();
   await fireEvent.press(screen.getByLabelText('Ocultar valores: Visitas sintéticas'));
   expect(screen.queryByText('2 avistamentos')).toBeNull();
+});
+
+test('lista todos os valores quando o gráfico mostra apenas um recorte', async () => {
+  const screen = await render(
+    <ActivityChart
+      title="Espécies sintéticas"
+      data={[{ label: 'Arara', value: 4 }]}
+      valuesData={[{ label: 'Arara', value: 4 }, { label: 'Tucano', value: 2 }]}
+      variant="bar"
+    />
+  );
+
+  await fireEvent.press(screen.getByLabelText('Mostrar valores: Espécies sintéticas'));
+
+  expect(screen.getByText('Tucano')).toBeTruthy();
+  expect(screen.getByText('2 avistamentos')).toBeTruthy();
+});
+
+test('permite rolar rótulos de intervalos de data sem sobreposição', async () => {
+  const screen = await render(
+    <ActivityChart
+      title="Visitas por período"
+      data={[
+        { label: '15/09–20/09', value: 1 },
+        { label: '21/09–26/09', value: 2 },
+      ]}
+      variant="bar"
+      scrollable
+    />
+  );
+
+  expect(screen.getByTestId('chart-scroll-container')).toBeTruthy();
+  expect(screen.getByText('15/09–20/09')).toBeTruthy();
 });
