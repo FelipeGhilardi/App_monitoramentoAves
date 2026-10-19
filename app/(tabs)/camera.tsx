@@ -65,7 +65,7 @@ export default function AboutScreen() {
         />
         <InfoCard
           icon="leaf-outline" title="Espécies monitoradas" subtitle="Avifauna paulista"
-          description="O sistema foi projetado para reconhecer espécies comuns do Estado de São Paulo, como Bem-te-vi, Sabiá-laranjeira, Sanhaço-cinzento, Tico-tico e outras aves urbanas."
+          description="O sistema foi projetado para reconhecer espécies comuns do Estado de São Paulo, como Bem-te-vi, Sabiá-laranjeira e Avoante."
         />
       </ScrollView>
     </View>

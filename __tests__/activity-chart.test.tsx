@@ -35,6 +35,15 @@ test('gráfico vazio não oferece pontos para seleção', async () => {
   expect(screen.queryByRole('button', { name: /Selecionar/ })).toBeNull();
 });
 
+test('gráfico de linha pode ocultar os marcadores', async () => {
+  const screen = await render(<ActivityChart title="Frequência por hora" data={data} variant="line" showPoints={false} />);
+  await fireEvent(screen.getByTestId('chart-plot-container'), 'layout', { nativeEvent: { layout: { width: 210, height: 140 } } });
+
+  expect(screen.queryByTestId('chart-point')).toBeNull();
+  await fireEvent.press(screen.getByLabelText('Selecionar 09h em Frequência por hora'));
+  expect(screen.getByText('09h: 2 avistamentos')).toBeTruthy();
+});
+
 test('valores completos podem ser consultados sem tocar em pontos do gráfico', async () => {
   const screen = await render(<ActivityChart title="Visitas sintéticas" data={data} variant="line" />);
   expect(screen.queryByText('2 avistamentos')).toBeNull();

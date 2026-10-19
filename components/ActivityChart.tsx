@@ -22,9 +22,14 @@ interface Props {
   valuesData?: ChartPoint[];
   variant: 'bar' | 'line';
   scrollable?: boolean;
+  xLabelFontSize?: number;
+  showPoints?: boolean;
 }
 
-export default function ActivityChart({ title, data, valuesData = data, variant, scrollable = false }: Props) {
+export default function ActivityChart({
+  title, data, valuesData = data, variant, scrollable = false, xLabelFontSize = theme.fonts.sizes.xs,
+  showPoints = true,
+}: Props) {
   const [plotWidth, setPlotWidth] = useState(0);
   const [selected, setSelected] = useState<number | null>(null);
   const [showValues, setShowValues] = useState(false);
@@ -66,7 +71,7 @@ export default function ActivityChart({ title, data, valuesData = data, variant,
                   const dy = next.y - point.y;
                   return <View key={index} style={[styles.line, { width: Math.sqrt(dx * dx + dy * dy), left: point.x, top: point.y, transform: [{ rotate: `${Math.atan2(dy, dx) * 180 / Math.PI}deg` }] }]} />;
                 })}
-                {points.map((point, index) => <View key={index} style={[styles.point, { left: point.x - 6, top: point.y - 6, backgroundColor: selected === index ? theme.colors.primaryDark : theme.colors.primary }]} />)}
+                {showPoints && points.map((point, index) => <View key={index} testID="chart-point" style={[styles.point, { left: point.x - 6, top: point.y - 6, backgroundColor: selected === index ? theme.colors.primaryDark : theme.colors.primary }]} />)}
               </>
             )}
           </View>
@@ -88,7 +93,7 @@ export default function ActivityChart({ title, data, valuesData = data, variant,
       </View>
       <View style={styles.xAxis}>
         {data.map((point, index) => (
-          <Text key={index} style={styles.xLabel}>
+          <Text key={index} style={[styles.xLabel, { fontSize: xLabelFontSize }]}>
             {data.length > 12 && index % 3 !== 0 ? '' : point.label}
           </Text>
         ))}
@@ -139,7 +144,7 @@ const styles = StyleSheet.create({
   gridLine: { position: 'absolute', left: 0, right: 0, height: 1, backgroundColor: theme.colors.background },
   bars: { flexDirection: 'row', alignItems: 'flex-end' },
   barColumn: { flex: 1, justifyContent: 'flex-end', paddingHorizontal: theme.spacing.sm / 2 },
-  bar: { width: '100%', borderTopLeftRadius: 4, borderTopRightRadius: 4 },
+  bar: { width: '60%', alignSelf: 'center', borderTopLeftRadius: 4, borderTopRightRadius: 4 },
   line: { position: 'absolute', height: 3, backgroundColor: theme.colors.primary, transformOrigin: 'left center' },
   point: { position: 'absolute', width: 12, height: 12, borderRadius: 6, borderWidth: 2, borderColor: theme.colors.surface },
   xAxis: { flexDirection: 'row', paddingLeft: 36 },
