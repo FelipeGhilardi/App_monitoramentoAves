@@ -48,21 +48,7 @@ export default function ActivityChart({ title, data, valuesData = data, variant,
           style={[styles.plot, { height }]}
           onLayout={(event) => setPlotWidth(event.nativeEvent.layout.width)}
         >
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Selecionar valor em ${title}`}
-            accessibilityHint="Os valores também estão disponíveis no botão Mostrar valores."
-            accessibilityState={{ disabled: plotWidth <= 0 || data.length === 0 }}
-            disabled={plotWidth <= 0 || data.length === 0}
-            style={styles.plotTouch}
-            onPress={(event) => {
-              const location = event.nativeEvent.locationX;
-              const index = Number.isFinite(location)
-                ? Math.floor(location / (plotWidth / data.length))
-                : (selected === null ? 0 : (selected + 1) % data.length);
-              setSelected(Math.max(0, Math.min(data.length - 1, index)));
-            }}
-          >
+          <View pointerEvents="none" style={StyleSheet.absoluteFill}>
             {yLabels.map((_, index) => <View key={index} style={[styles.gridLine, { top: index * height / 4 }]} />)}
             {variant === 'bar' ? (
               <View style={[styles.bars, { height }]}>
@@ -83,7 +69,21 @@ export default function ActivityChart({ title, data, valuesData = data, variant,
                 {points.map((point, index) => <View key={index} style={[styles.point, { left: point.x - 6, top: point.y - 6, backgroundColor: selected === index ? theme.colors.primaryDark : theme.colors.primary }]} />)}
               </>
             )}
-          </Pressable>
+          </View>
+          <View style={styles.touchTargets}>
+            {data.map((point, index) => (
+              <Pressable
+                key={index}
+                accessibilityRole="button"
+                accessibilityLabel={`Selecionar ${point.label} em ${title}`}
+                accessibilityHint="Os valores também estão disponíveis no botão Mostrar valores."
+                accessibilityState={{ selected: selected === index }}
+                accessibilityValue={{ text: `${point.value} ${point.value === 1 ? 'avistamento' : 'avistamentos'}` }}
+                style={styles.touchTarget}
+                onPress={() => setSelected(index)}
+              />
+            ))}
+          </View>
         </View>
       </View>
       <View style={styles.xAxis}>
@@ -134,10 +134,11 @@ const styles = StyleSheet.create({
   yAxis: { width: 36, alignItems: 'flex-end', justifyContent: 'space-between', paddingRight: theme.spacing.sm },
   axisLabel: { fontSize: theme.fonts.sizes.xs, color: theme.colors.textSecondary },
   plot: { flex: 1, position: 'relative' },
-  plotTouch: { flex: 1, position: 'relative' },
+  touchTargets: { flex: 1, flexDirection: 'row' },
+  touchTarget: { flex: 1 },
   gridLine: { position: 'absolute', left: 0, right: 0, height: 1, backgroundColor: theme.colors.background },
-  bars: { flexDirection: 'row', alignItems: 'flex-end', gap: theme.spacing.sm },
-  barColumn: { flex: 1, justifyContent: 'flex-end' },
+  bars: { flexDirection: 'row', alignItems: 'flex-end' },
+  barColumn: { flex: 1, justifyContent: 'flex-end', paddingHorizontal: theme.spacing.sm / 2 },
   bar: { width: '100%', borderTopLeftRadius: 4, borderTopRightRadius: 4 },
   line: { position: 'absolute', height: 3, backgroundColor: theme.colors.primary, transformOrigin: 'left center' },
   point: { position: 'absolute', width: 12, height: 12, borderRadius: 6, borderWidth: 2, borderColor: theme.colors.surface },

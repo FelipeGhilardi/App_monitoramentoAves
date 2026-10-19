@@ -3,20 +3,36 @@ import ActivityChart from '../components/ActivityChart';
 
 const data = [{ label: '06h', value: 0 }, { label: '09h', value: 2 }, { label: '12h', value: 1 }];
 
-test.each(['bar', 'line'] as const)('gráfico %s usa a área medida para selecionar um valor', async (variant) => {
+test.each(['bar', 'line'] as const)('gráfico %s seleciona o item tocado sem depender de coordenadas', async (variant) => {
   const screen = await render(<ActivityChart title="Visitas sintéticas" data={data} variant={variant} />);
-  expect(screen.getByLabelText('Selecionar valor em Visitas sintéticas').props.accessibilityState.disabled).toBe(true);
   await fireEvent(screen.getByTestId('chart-plot-container'), 'layout', { nativeEvent: { layout: { width: 210, height: 180 } } });
-  expect(screen.getByLabelText('Selecionar valor em Visitas sintéticas').props.accessibilityState.disabled).toBe(false);
-  await fireEvent.press(screen.getByLabelText('Selecionar valor em Visitas sintéticas'), { nativeEvent: { locationX: 100 } });
+
+  await fireEvent.press(screen.getByLabelText('Selecionar 09h em Visitas sintéticas'), { nativeEvent: { locationX: 5 } });
   expect(screen.getByText('09h: 2 avistamentos')).toBeTruthy();
-  await fireEvent(screen.getByTestId('chart-plot-container'), 'layout', { nativeEvent: { layout: { width: 360, height: 180 } } });
-  await fireEvent.press(screen.getByLabelText('Selecionar valor em Visitas sintéticas'), { nativeEvent: { locationX: 100 } });
-  expect(screen.getByText('06h: 0 avistamentos')).toBeTruthy();
-  await fireEvent.press(screen.getByLabelText('Selecionar valor em Visitas sintéticas'), { nativeEvent: { locationX: 360 } });
+  expect(screen.getByLabelText('Selecionar 09h em Visitas sintéticas').props.accessibilityState.selected).toBe(true);
+
+  await fireEvent.press(screen.getByLabelText('Selecionar 12h em Visitas sintéticas'));
   expect(screen.getByText('12h: 1 avistamento')).toBeTruthy();
-  await fireEvent.press(screen.getByLabelText('Selecionar valor em Visitas sintéticas'), { nativeEvent: { locationX: Number.NaN } });
+  expect(screen.queryByText('09h: 2 avistamentos')).toBeNull();
+
+  await fireEvent.press(screen.getByLabelText('Selecionar 06h em Visitas sintéticas'));
   expect(screen.getByText('06h: 0 avistamentos')).toBeTruthy();
+});
+
+test.each(['bar', 'line'] as const)('gráfico %s mantém a seleção correta depois de redimensionado', async (variant) => {
+  const screen = await render(<ActivityChart title="Visitas sintéticas" data={data} variant={variant} />);
+  await fireEvent(screen.getByTestId('chart-plot-container'), 'layout', { nativeEvent: { layout: { width: 210, height: 180 } } });
+  await fireEvent.press(screen.getByLabelText('Selecionar 09h em Visitas sintéticas'));
+  await fireEvent(screen.getByTestId('chart-plot-container'), 'layout', { nativeEvent: { layout: { width: 360, height: 180 } } });
+
+  await fireEvent.press(screen.getByLabelText('Selecionar 12h em Visitas sintéticas'), { nativeEvent: { locationX: 1 } });
+  expect(screen.getByText('12h: 1 avistamento')).toBeTruthy();
+});
+
+test('gráfico vazio não oferece pontos para seleção', async () => {
+  const screen = await render(<ActivityChart title="Visitas sintéticas" data={[]} variant="bar" />);
+
+  expect(screen.queryByRole('button', { name: /Selecionar/ })).toBeNull();
 });
 
 test('valores completos podem ser consultados sem tocar em pontos do gráfico', async () => {
@@ -61,4 +77,7 @@ test('permite rolar rótulos de intervalos de data sem sobreposição', async ()
 
   expect(screen.getByTestId('chart-scroll-container')).toBeTruthy();
   expect(screen.getByText('15/09–20/09')).toBeTruthy();
+  await fireEvent(screen.getByTestId('chart-plot-container'), 'layout', { nativeEvent: { layout: { width: 420, height: 180 } } });
+  await fireEvent.press(screen.getByLabelText('Selecionar 21/09–26/09 em Visitas por período'), { nativeEvent: { locationX: 3 } });
+  expect(screen.getByText('21/09–26/09: 2 avistamentos')).toBeTruthy();
 });
