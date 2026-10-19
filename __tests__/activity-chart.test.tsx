@@ -1,7 +1,72 @@
 import { fireEvent, render } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
 import ActivityChart from '../components/ActivityChart';
 
 const data = [{ label: '06h', value: 0 }, { label: '09h', value: 2 }, { label: '12h', value: 1 }];
+
+test('barras de 50 e 52 avistamentos respeitam a marca de 50 e a mesma escala', async () => {
+  const screen = await render(
+    <ActivityChart
+      title="Escala de avistamentos"
+      data={[100, 50, 52, 1, 0].map((value, index) => ({ label: `Dia ${index}`, value }))}
+      variant="bar"
+    />
+  );
+  const grid = screen.getAllByTestId('chart-grid-line').map((line) => StyleSheet.flatten(line.props.style));
+  const bars = screen.getAllByTestId('chart-bar').map((bar) => StyleSheet.flatten(bar.props.style));
+  const barArea = StyleSheet.flatten(screen.getByTestId('chart-bars').props.style);
+  const baseline = grid[4].top;
+  const fullHeight = baseline - grid[0].top;
+
+  expect(barArea.marginTop).toBeCloseTo(grid[0].top);
+  expect(barArea.marginTop + barArea.height).toBeCloseTo(baseline);
+  expect(bars[1].height).toBeCloseTo(baseline - grid[2].top);
+  expect(baseline - bars[2].height).toBeLessThan(grid[2].top);
+  expect(bars[0].height).toBeCloseTo(fullHeight);
+  expect(bars[3].height).toBeCloseTo(fullHeight / 100);
+  expect(bars[4].height).toBe(0);
+});
+
+test('pontos da linha usam a mesma escala da grade, incluindo zero e o máximo', async () => {
+  const screen = await render(
+    <ActivityChart
+      title="Escala por hora"
+      data={[100, 50, 52, 0].map((value, index) => ({ label: `${index}h`, value }))}
+      variant="line"
+    />
+  );
+  await fireEvent(screen.getByTestId('chart-plot-container'), 'layout', { nativeEvent: { layout: { width: 300, height: 140 } } });
+  const grid = screen.getAllByTestId('chart-grid-line').map((line) => StyleSheet.flatten(line.props.style));
+  const pointCenters = screen.getAllByTestId('chart-point').map((point) => {
+    const style = StyleSheet.flatten(point.props.style);
+    return style.top + style.height / 2;
+  });
+
+  expect(pointCenters[0]).toBeCloseTo(grid[0].top);
+  expect(pointCenters[1]).toBeCloseTo(grid[2].top);
+  expect(pointCenters[2]).toBeLessThan(grid[2].top);
+  expect(pointCenters[3]).toBeCloseTo(grid[4].top);
+});
+
+test.each([
+  { maximum: 5, labels: [5, 4, 3, 2, 1, 0] },
+  { maximum: 10, labels: [10, 8, 6, 4, 2, 0] },
+  { maximum: 50, labels: [50, 40, 30, 20, 10, 0] },
+  { maximum: 100, labels: [100, 75, 50, 25, 0] },
+])('eixo com máximo $maximum mantém números inteiros e alinhados à grade', async ({ maximum, labels }) => {
+  const screen = await render(
+    <ActivityChart title="Escala inteira" data={[{ label: 'Total', value: maximum }]} variant="bar" />
+  );
+
+  expect(screen.getAllByTestId('chart-y-label').map((label) => label.props.children)).toEqual(labels);
+  const ticks = screen.getAllByTestId('chart-y-tick');
+  const grid = screen.getAllByTestId('chart-grid-line');
+  ticks.forEach((tick, index) => {
+    const style = StyleSheet.flatten(tick.props.style);
+    const gridY = StyleSheet.flatten(grid[index].props.style).top;
+    expect(style.top + style.height / 2).toBeCloseTo(gridY);
+  });
+});
 
 test.each(['bar', 'line'] as const)('gráfico %s seleciona o item tocado sem depender de coordenadas', async (variant) => {
   const screen = await render(<ActivityChart title="Visitas sintéticas" data={data} variant={variant} />);

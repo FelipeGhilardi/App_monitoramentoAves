@@ -34,11 +34,16 @@ export default function ActivityChart({
   const [selected, setSelected] = useState<number | null>(null);
   const [showValues, setShowValues] = useState(false);
   const height = variant === 'bar' ? 180 : 140;
+  const inset = 10;
+  const plotHeight = height - inset * 2;
+  const baseline = height - inset;
   const top = Math.max(niceCeil(Math.max(...data.map((point) => point.value), 0)), 4);
-  const yLabels = [4, 3, 2, 1, 0].map((index) => Math.round((top * index) / 4));
+  const tickCount = top % 4 === 0 ? 4 : 5;
+  const yLabels = Array.from({ length: tickCount + 1 }, (_, index) => top * (tickCount - index) / tickCount);
+  const valueToY = (value: number) => baseline - value / top * plotHeight;
   const points = data.map((point, index) => ({
     x: (index + 0.5) * plotWidth / data.length,
-    y: height - (point.value / top) * (height - 20) - 10,
+    y: valueToY(point.value),
   }));
   const chartWidth = scrollable ? Math.max(456, data.length * 84 + 36) : undefined;
 
@@ -46,7 +51,11 @@ export default function ActivityChart({
     <View style={chartWidth ? { width: chartWidth } : undefined}>
       <View style={styles.row}>
         <View style={[styles.yAxis, { height }]}>
-          {yLabels.map((label, index) => <Text key={index} style={styles.axisLabel}>{label}</Text>)}
+          {yLabels.map((label, index) => (
+            <View key={index} testID="chart-y-tick" style={[styles.yTick, { top: valueToY(label) - inset, height: inset * 2 }]}>
+              <Text testID="chart-y-label" style={styles.axisLabel}>{label}</Text>
+            </View>
+          ))}
         </View>
         <View
           testID="chart-plot-container"
@@ -54,12 +63,12 @@ export default function ActivityChart({
           onLayout={(event) => setPlotWidth(event.nativeEvent.layout.width)}
         >
           <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-            {yLabels.map((_, index) => <View key={index} style={[styles.gridLine, { top: index * height / 4 }]} />)}
+            {yLabels.map((label, index) => <View key={index} testID="chart-grid-line" style={[styles.gridLine, { top: valueToY(label) }]} />)}
             {variant === 'bar' ? (
-              <View style={[styles.bars, { height }]}>
+              <View testID="chart-bars" style={[styles.bars, { height: plotHeight, marginTop: inset }]}>
                 {data.map((point, index) => (
                   <View key={index} style={styles.barColumn}>
-                    <View style={[styles.bar, { height: Math.max(point.value / top * (height - 20), point.value > 0 ? 4 : 0), backgroundColor: selected === index ? theme.colors.primaryDark : theme.colors.primary }]} />
+                    <View testID="chart-bar" style={[styles.bar, { height: baseline - valueToY(point.value), backgroundColor: selected === index ? theme.colors.primaryDark : theme.colors.primary }]} />
                   </View>
                 ))}
               </View>
@@ -69,7 +78,7 @@ export default function ActivityChart({
                   const next = points[index + 1];
                   const dx = next.x - point.x;
                   const dy = next.y - point.y;
-                  return <View key={index} style={[styles.line, { width: Math.sqrt(dx * dx + dy * dy), left: point.x, top: point.y, transform: [{ rotate: `${Math.atan2(dy, dx) * 180 / Math.PI}deg` }] }]} />;
+                  return <View key={index} style={[styles.line, { width: Math.sqrt(dx * dx + dy * dy), left: point.x, top: point.y - 1.5, transform: [{ rotate: `${Math.atan2(dy, dx) * 180 / Math.PI}deg` }] }]} />;
                 })}
                 {showPoints && points.map((point, index) => <View key={index} testID="chart-point" style={[styles.point, { left: point.x - 6, top: point.y - 6, backgroundColor: selected === index ? theme.colors.primaryDark : theme.colors.primary }]} />)}
               </>
@@ -136,7 +145,8 @@ export default function ActivityChart({
 const styles = StyleSheet.create({
   container: { gap: theme.spacing.sm },
   row: { flexDirection: 'row' },
-  yAxis: { width: 36, alignItems: 'flex-end', justifyContent: 'space-between', paddingRight: theme.spacing.sm },
+  yAxis: { width: 36, position: 'relative' },
+  yTick: { position: 'absolute', left: 0, right: theme.spacing.sm, justifyContent: 'center', alignItems: 'flex-end' },
   axisLabel: { fontSize: theme.fonts.sizes.xs, color: theme.colors.textSecondary },
   plot: { flex: 1, position: 'relative' },
   touchTargets: { flex: 1, flexDirection: 'row' },
